@@ -25,6 +25,8 @@ from handlers import (
     legal_entities_handler,
     entrepreneurs_handler,
     individuals_handler,
+    service_detail_handler,
+    service_callback_handler,
     appointment_handler,
     appointment_callback_handler,
     process_appointment,
@@ -72,6 +74,12 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^👤 Физическим лицам$"), individuals_handler))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к услугам$"), services_handler))
     
+    # Обработчики конкретных услуг (должны быть после обработчиков категорий)
+    application.add_handler(MessageHandler(
+        filters.Regex("^(💬 Консультации юриста|💬 Юридические консультации|📝 Регистрация ООО|📝 Регистрация ИП|📊 Бухгалтерские услуги|🏛️ Судебное сопровождение|📝 Составление исковых заявлений|📊 Налоговые декларации 3-НДФЛ|🛡️ Защита прав потребителей|🏠 Сделки с недвижимостью|💻 Онлайн-консультация|💳 Расчетный счет|📄 Изменения в устав, ЕГРЮЛ|⚖️ Досудебная работа|📋 Составление договоров|📦 Абонентское обслуживание|🔍 Анализ бизнеса|📄 Изменение ЕГРИП|🗑️ Ликвидация ИП|💳 Расчетный счет для ИП|📊 Налоговые отчеты|📋 Договорная работа|📦 Абонентское обслуживание)$"),
+        service_detail_handler
+    ))
+    
     # Обработчик контактов и о компании
     application.add_handler(MessageHandler(filters.Regex("^📍 Контакты$"), contacts_handler))
     application.add_handler(MessageHandler(filters.Regex("^ℹ️ О компании$"), about_handler))
@@ -105,6 +113,9 @@ def main():
     
     # Callback для записей
     application.add_handler(CallbackQueryHandler(appointment_callback_handler, pattern="^appt_"))
+    
+    # Callback для услуг
+    application.add_handler(CallbackQueryHandler(service_callback_handler, pattern="^(start_appointment|back_to_services)$"))
     
     # Обработчик вопросов (ConversationHandler)
     question_conv = ConversationHandler(
