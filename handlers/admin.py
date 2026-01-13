@@ -224,8 +224,6 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             )
         except Exception as e:
             # Если ошибка с Markdown, пробуем без него
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Ошибка отправки деталей заявки: {e}")
             await query.edit_message_text(
                 msg.replace('*', ''),
