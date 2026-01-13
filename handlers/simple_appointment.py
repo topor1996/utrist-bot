@@ -61,11 +61,14 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     logger.info(f"process_simple_appointment вызван: state={state}, text='{text[:50]}', user_data keys={list(user_data.keys())}")
     
     # Если нет активного процесса записи, не обрабатываем
-    # Возвращаем None, чтобы другие обработчики могли обработать сообщение
+    # В python-telegram-bot, если обработчик ничего не делает (не отправляет сообщения),
+    # обработка продолжается к следующему обработчику.
+    # Просто выходим без обработки - это позволит service_detail_handler обработать сообщение
     if state == 0:
         # Не обрабатываем, пусть другие обработчики попробуют
         logger.info(f"process_simple_appointment: state=0, пропускаем сообщение '{text[:50]}'")
-        return None
+        # Просто return без значения - обработка продолжится к следующему обработчику
+        return
     
     logger.info(f"process_simple_appointment: обрабатываем сообщение, state={state}, text={text[:50]}")
     
@@ -84,7 +87,7 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 "❌ Пожалуйста, введите ваше полное имя (минимум 3 символа):"
             )
-            return None
+            return
         
         # Убеждаемся, что simple_appointment существует
         if 'simple_appointment' not in user_data:
@@ -114,8 +117,6 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             logger.error(f"Ошибка отправки запроса на телефон: {e}")
             import traceback
             logger.error(traceback.format_exc())
-        
-        return None
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_phone']:
         if not validate_phone(text):
