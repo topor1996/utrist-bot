@@ -102,15 +102,17 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     logger.info(f"service_detail_handler вызван: service_name='{service_name}', state={state}, simple_appointment={simple_appointment}")
     
     # Если идет процесс записи, НЕ обрабатываем это сообщение
+    # В python-telegram-bot обработчики вызываются по порядку, и если один обработал сообщение,
+    # другие не вызываются. Но если обработчик ничего не делает (не отправляет сообщения),
+    # обработка продолжается к следующему обработчику.
+    # Поэтому мы просто выходим без обработки, если идет процесс записи.
     if state != 0:
         logger.info(f"service_detail_handler: пропускаем, идет процесс записи (state={state})")
-        # В python-telegram-bot, если обработчик ничего не делает, обработка продолжается
-        # Но мы не должны обрабатывать это сообщение, поэтому просто выходим
-        return
+        return  # Просто выходим, не обрабатываем
     
     if simple_appointment:
         logger.info(f"service_detail_handler: пропускаем, есть активная заявка")
-        return
+        return  # Просто выходим, не обрабатываем
     
     logger.info(f"service_detail_handler: обрабатываем выбор услуги: {service_name}")
     
