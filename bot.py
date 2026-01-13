@@ -125,6 +125,7 @@ def main():
     application.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern="^cancel_appointment$"))
     
     # Обработчик вопросов (ConversationHandler) - ДОЛЖЕН БЫТЬ ПЕРЕД unified_message_handler!
+    # ConversationHandler имеет приоритет и обрабатывает сообщения, если активен процесс вопроса
     question_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^❓ Задать вопрос$"), question_handler)],
         states={
@@ -139,6 +140,7 @@ def main():
     # Универсальный обработчик сообщений
     # Объединяет логику process_simple_appointment и service_detail_handler
     # Сначала проверяет, идет ли процесс записи, затем обрабатывает выбор услуги
+    # НО: не обрабатывает сообщения, если идет процесс вопроса (question_state != 0)
     application.add_handler(MessageHandler(
         filters.TEXT & 
         ~filters.COMMAND & 
