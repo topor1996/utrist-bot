@@ -57,7 +57,10 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     
     # Если нет активного процесса записи, не обрабатываем
     if state == 0:
+        # Не обрабатываем, пусть другие обработчики попробуют
         return
+    
+    print(f"DEBUG process_simple_appointment: state={state}, text={text[:50]}")
     
     if text == '🏠 Главное меню':
         user_data.clear()
@@ -118,6 +121,8 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         user_data['simple_appointment']['client_email'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_confirm']
         
+        print(f"DEBUG: Email введен, показываем подтверждение. user_data = {user_data}")
+        
         # Показываем данные для подтверждения
         confirm_text = f"""
 ✅ **Проверьте ваши данные:**
@@ -141,6 +146,8 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
+        
+        print(f"DEBUG: Сообщение с кнопками отправлено")
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_confirm']:
         # Это не должно происходить, но на всякий случай
@@ -151,23 +158,48 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 async def submit_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отправки заявки"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("Отправляем заявку...")
     
     user_data = context.user_data
     appointment_data = user_data.get('simple_appointment', {})
     
+    print(f"DEBUG: submit_appointment_callback вызван")
+    print(f"DEBUG: user_data = {user_data}")
+    print(f"DEBUG: appointment_data = {appointment_data}")
+    
     if not appointment_data:
-        await query.edit_message_text("❌ Ошибка: данные заявки не найдены.")
+        print("DEBUG: appointment_data пустой!")
+        await query.edit_message_text("❌ Ошибка: данные заявки не найдены. Пожалуйста, начните заново.")
         return
     
-    # Создаем заявку
-    appointment_id = await create_appointment(
-        user_id=update.effective_user.id,
-        service_type=appointment_data['service_type'],
-        client_name=appointment_data['client_name'],
-        client_phone=appointment_data['client_phone'],
-        client_email=appointment_data['client_email']
-    )
+    # Проверяем, что все данные есть
+    required_fields = ['service_type', 'client_name', 'client_phone', 'client_email']
+    missing_fields = [field for field in required_fields if not appointment_data.get(field)]
+    
+    print(f"DEBUG: Проверка полей. missing_fields = {missing_fields}")
+    print(f"DEBUG: appointment_data keys = {list(appointment_data.keys())}")
+    
+    if missing_fields:
+        error_msg = f"❌ Ошибка: не заполнены поля: {', '.join(missing_fields)}. Пожалуйста, начните заново."
+        print(f"DEBUG: {error_msg}")
+        await query.edit_message_text(error_msg)
+        return
+    
+    try:
+        # Создаем заявку
+        appointment_id = await create_appointment(
+            user_id=query.from_user.id,
+            service_type=appointment_data['service_type'],
+            client_name=appointment_data['client_name'],
+            client_phone=appointment_data['client_phone'],
+            client_email=appointment_data['client_email']
+        )
+    except Exception as e:
+        print(f"Ошибка создания заявки: {e}")
+        await query.edit_message_text(
+            "❌ Произошла ошибка при создании заявки. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
+        )
+        return
     
     # Отправляем уведомление администраторам
     from datetime import datetime
@@ -182,6 +214,8 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
 ⏰ Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}
 """
     
+    # Отправляем уведомление администраторам
+    notification_sent = False
     for admin_id in ADMIN_IDS:
         try:
             from keyboards.admin import appointment_actions_keyboard
@@ -191,8 +225,12 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
                 parse_mode='Markdown',
                 reply_markup=appointment_actions_keyboard(appointment_id)
             )
+            notification_sent = True
         except Exception as e:
             print(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+    
+    if not notification_sent and ADMIN_IDS:
+        print(f"ВНИМАНИЕ: Уведомление администраторам не отправлено! Проверьте ADMIN_IDS в настройках.")
     
     # Отправляем красивое сообщение клиенту
     thank_you_text = f"""
