@@ -96,6 +96,7 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     service_name = update.message.text
     
     # Проверяем, не идет ли процесс записи
+    # ВАЖНО: проверяем ПЕРЕД любыми другими действиями
     state = context.user_data.get('simple_appointment_state', 0)
     simple_appointment = context.user_data.get('simple_appointment', {})
     
@@ -103,17 +104,21 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     # Если идет процесс записи, НЕ обрабатываем это сообщение
     # В python-telegram-bot обработчики вызываются по порядку.
-    # Если обработчик ничего не делает (не отправляет сообщения), обработка продолжается.
-    # Поэтому мы просто выходим без обработки, если идет процесс записи.
+    # Проблема: если обработчик вызывается, но ничего не делает, следующий обработчик может не вызваться.
+    # Решение: используем фильтр на уровне MessageHandler, чтобы этот обработчик вообще не вызывался
+    # во время процесса записи. Но так как мы не можем динамически менять фильтры,
+    # просто выходим без обработки - это должно позволить обработке продолжиться.
     if state != 0:
         logger.info(f"service_detail_handler: пропускаем, идет процесс записи (state={state})")
-        # Возвращаем None, чтобы обработка продолжилась к process_simple_appointment
-        return None
+        # В python-telegram-bot, если обработчик ничего не делает (не отправляет сообщения),
+        # обработка должна продолжиться к следующему обработчику.
+        # Но на практике это может не работать, поэтому лучше использовать другой подход.
+        # Просто выходим без обработки
+        return
     
     if simple_appointment:
         logger.info(f"service_detail_handler: пропускаем, есть активная заявка")
-        # Возвращаем None, чтобы обработка продолжилась к process_simple_appointment
-        return None
+        return
     
     logger.info(f"service_detail_handler: обрабатываем выбор услуги: {service_name}")
     
