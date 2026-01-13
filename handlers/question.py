@@ -32,6 +32,8 @@ async def process_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
     if text in ['🏠 Главное меню', '🔙 Главное меню']:
+        # ВАЖНО: удаляем question_state перед очисткой
+        user_data.pop('question_state', None)
         user_data.clear()
         await update.message.reply_text(
             "🏠 Главное меню",
@@ -40,57 +42,62 @@ async def process_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     # Обрабатываем вопрос
-        # Получаем имя пользователя из Telegram профиля
-        user = update.effective_user
-        client_name = user.first_name or "Пользователь"
-        if user.last_name:
-            client_name += f" {user.last_name}"
+    # Получаем имя пользователя из Telegram профиля
+    user = update.effective_user
+    client_name = user.first_name or "Пользователь"
+    if user.last_name:
+        client_name += f" {user.last_name}"
+    
+    # Создаем вопрос
+    try:
+        question_id = await create_question(
+            user_id=user.id,
+            question_text=text,
+            client_name=client_name,
+            client_phone=None
+        )
         
-        # Создаем вопрос
-        try:
-            question_id = await create_question(
-                user_id=user.id,
-                question_text=text,
-                client_name=client_name,
-                client_phone=None
-            )
-            
-            logger.info(f"Создан вопрос #{question_id} от пользователя {user.id}")
-            
-            # Отправляем уведомление администраторам
-            question_info = f"""
+        logger.info(f"Создан вопрос #{question_id} от пользователя {user.id}")
+        
+        # Отправляем уведомление администраторам
+        question_info = f"""
 ❓ Новый вопрос от клиента
 
 ID: {question_id}
 👤 Имя: {client_name}
 💬 Вопрос: {text}
 """
-            
-            for admin_id in ADMIN_IDS:
-                try:
-                    await context.bot.send_message(chat_id=admin_id, text=question_info)
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления администратору {admin_id}: {e}")
-            
-            await update.message.reply_text(
-                """
+        
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(chat_id=admin_id, text=question_info)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления администратору {admin_id}: {e}")
+        
+        await update.message.reply_text(
+            """
 ✅ Ваш вопрос отправлен!
 
 Мы свяжемся с вами в ближайшее время.
 
 Спасибо за обращение!
 """,
-                reply_markup=main_menu_keyboard()
-            )
-            
-            user_data.clear()
-            # Завершаем ConversationHandler
-            return ConversationHandler.END
-        except Exception as e:
-            logger.error(f"Ошибка создания вопроса: {e}")
-            await update.message.reply_text(
-                "❌ Произошла ошибка при отправке вопроса. Попробуйте позже.",
-                reply_markup=main_menu_keyboard()
-            )
-            user_data.clear()
-            return ConversationHandler.END
+            reply_markup=main_menu_keyboard()
+        )
+        
+        # ВАЖНО: удаляем question_state перед очисткой
+        user_data.pop('question_state', None)
+        user_data.clear()
+        # Завершаем ConversationHandler
+        logger.info(f"Вопрос обработан, question_state удален, ConversationHandler завершен")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Ошибка создания вопроса: {e}")
+        await update.message.reply_text(
+            "❌ Произошла ошибка при отправке вопроса. Попробуйте позже.",
+            reply_markup=main_menu_keyboard()
+        )
+        # ВАЖНО: удаляем question_state перед очисткой
+        user_data.pop('question_state', None)
+        user_data.clear()
+        return ConversationHandler.END
