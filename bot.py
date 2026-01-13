@@ -30,6 +30,8 @@ from handlers import (
     appointment_handler,
     appointment_callback_handler,
     process_appointment,
+    process_simple_appointment,
+    SIMPLE_APPOINTMENT_STATES,
     question_handler,
     process_question,
     admin_handler,
@@ -120,6 +122,24 @@ def main():
     
     # Callback для услуг
     application.add_handler(CallbackQueryHandler(service_callback_handler, pattern="^(start_appointment|back_to_services)$"))
+    
+    # Обработчик упрощенной записи (ConversationHandler)
+    simple_appointment_conv = ConversationHandler(
+        entry_points=[],  # Запускается через callback
+        states={
+            SIMPLE_APPOINTMENT_STATES['waiting_name']: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
+            ],
+            SIMPLE_APPOINTMENT_STATES['waiting_phone']: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
+            ],
+            SIMPLE_APPOINTMENT_STATES['waiting_email']: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
+            ],
+        },
+        fallbacks=[MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler)],
+    )
+    application.add_handler(simple_appointment_conv)
     
     # Обработчик вопросов (ConversationHandler)
     question_conv = ConversationHandler(

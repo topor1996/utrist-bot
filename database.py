@@ -38,17 +38,18 @@ async def create_appointment(
     service_type: str,
     client_name: str,
     client_phone: str,
-    appointment_date: date,
-    appointment_time: time,
+    client_email: str = None,
+    appointment_date: date = None,
+    appointment_time: time = None,
     comment: str = None
 ) -> int:
     """Создать запись на консультацию"""
     async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
         cursor = await db.execute(
             """INSERT INTO appointments 
-               (user_id, service_type, client_name, client_phone, appointment_date, appointment_time, comment)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (user_id, service_type, client_name, client_phone, appointment_date, appointment_time, comment)
+               (user_id, service_type, client_name, client_phone, client_email, appointment_date, appointment_time, comment)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, service_type, client_name, client_phone, client_email, appointment_date, appointment_time, comment)
         )
         await db.commit()
         return cursor.lastrowid

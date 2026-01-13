@@ -92,6 +92,9 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     """Обработчик выбора конкретной услуги"""
     service_name = update.message.text
     
+    # Сохраняем выбранную услугу в контексте
+    context.user_data['selected_service'] = service_name
+    
     # Информация об услугах
     service_info = {
         '💬 Консультации юриста': """
@@ -240,7 +243,7 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     # Кнопки для действий
     keyboard = [
-        [InlineKeyboardButton('📞 Записаться на консультацию', callback_data='start_appointment')],
+        [InlineKeyboardButton('📝 Оставить заявку', callback_data='start_appointment')],
         [InlineKeyboardButton('🔙 Назад к услугам', callback_data='back_to_services')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -256,32 +259,38 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     
     if query.data == 'start_appointment':
-        # Запускаем процесс записи
+        # Получаем тип услуги из контекста
+        service_type = context.user_data.get('selected_service', 'Консультация')
+        
+        # Запускаем упрощенный процесс записи
+        from .simple_appointment import start_simple_appointment, SIMPLE_APPOINTMENT_STATES
+        
         await query.edit_message_text(
-            "📞 Запись на консультацию\n\nВыберите тип услуги:",
+            f"📝 Заявка на услугу: {service_type}\n\nНачинаем оформление заявки...",
             reply_markup=None
         )
-        # Отправляем сообщение с кнопками для записи
-        from telegram import ReplyKeyboardMarkup, KeyboardButton
-        keyboard = [
-            [KeyboardButton('💬 Консультация юриста')],
-            [KeyboardButton('📝 Регистрация ИП/ООО')],
-            [KeyboardButton('📊 Бухгалтерские услуги')],
-            [KeyboardButton('⚖️ Судебное сопровождение')],
-            [KeyboardButton('📋 Составление документов')],
-            [KeyboardButton('🔙 Главное меню')]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
-        # Устанавливаем состояние для начала процесса записи
-        from .appointment import APPOINTMENT_STATES
-        context.user_data['appointment'] = {}
-        context.user_data['appointment_state'] = APPOINTMENT_STATES['waiting_service']
+        # Устанавливаем состояние и запускаем процесс
+        context.user_data['simple_appointment'] = {'service_type': service_type}
+        context.user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_name']
+        
+        text = f"""
+📝 Заявка на услугу: {service_type}
+
+Для оформления заявки нам нужна следующая информация:
+
+👤 **ФИО** (полное имя)
+📞 **Номер телефона**
+📧 **Email адрес**
+
+Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:
+"""
         
         await query.message.reply_text(
-            "📞 Запись на консультацию\n\nВыберите тип услуги:",
-            reply_markup=reply_markup
+            text,
+            parse_mode='Markdown'
         )
+        
     elif query.data == 'back_to_services':
         await query.edit_message_text(
             "📋 Наши услуги\n\nВыберите категорию:",

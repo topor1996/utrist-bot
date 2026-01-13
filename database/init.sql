@@ -16,8 +16,9 @@ CREATE TABLE IF NOT EXISTS appointments (
     service_type TEXT NOT NULL,
     client_name TEXT NOT NULL,
     client_phone TEXT NOT NULL,
-    appointment_date DATE NOT NULL,
-    appointment_time TIME NOT NULL,
+    client_email TEXT,
+    appointment_date DATE,
+    appointment_time TIME,
     comment TEXT,
     status TEXT DEFAULT 'pending', -- pending, confirmed, cancelled, completed
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
