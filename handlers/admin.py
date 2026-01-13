@@ -5,6 +5,9 @@ from keyboards.admin import admin_keyboard, appointments_list_keyboard, question
 from keyboards.main_menu import main_menu_keyboard
 from datetime import date, timedelta
 from database import update_appointment_status, update_question_status, get_appointment_by_id, get_question_by_id
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик админ-панели"""
@@ -118,6 +121,7 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     data = query.data
+    logger.info(f"admin_callback_handler вызван с data: {data}")
     
     if data == 'admin_back':
         await query.edit_message_text(
@@ -140,40 +144,93 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         
         await query.edit_message_text(
             "📞 Записи на консультацию:",
-            reply_markup=appointments_list_keyboard(appointments)
+            reply_markup=appointments_list_keyboard(appointments, page=0)
+        )
+    
+    elif data.startswith('appt_page_'):
+        # Обработка пагинации списка заявок
+        page = int(data.split('_')[-1])
+        appointments = await get_pending_appointments()
+        if not appointments:
+            await query.edit_message_text(
+                "✅ Нет новых записей на консультацию.",
+                reply_markup=None
+            )
+            return
+        
+        await query.edit_message_text(
+            f"📞 Записи на консультацию (страница {page + 1}):",
+            reply_markup=appointments_list_keyboard(appointments, page=page)
         )
     
     elif data.startswith('appt_detail_'):
-        appointment_id = int(data.split('_')[-1])
-        appointment = await get_appointment_by_id(appointment_id)
-        
-        if not appointment:
-            await query.answer("Заявка не найдена", show_alert=True)
+        try:
+            appointment_id = int(data.split('_')[-1])
+            logger.info(f"Запрос деталей заявки с ID: {appointment_id}")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
             return
         
-        msg = f"""
-📋 Заявка #{appointment_id}
+        appointment = await get_appointment_by_id(appointment_id)
+        logger.info(f"Заявка получена из БД: {appointment is not None}, данные: {appointment}")
+        
+        if not appointment:
+            logger.warning(f"Заявка с ID {appointment_id} не найдена в БД")
+            await query.answer("❌ Заявка не найдена", show_alert=True)
+            return
+        
+        # Формируем сообщение с деталями заявки
+        msg = f"""📋 **Заявка #{appointment_id}**
 
-📝 Услуга: {appointment['service_type']}
-👤 ФИО: {appointment['client_name']}
-📞 Телефон: {appointment['client_phone']}
-📧 Email: {appointment.get('client_email', 'не указан')}
+📝 **Услуга:** {appointment['service_type']}
+👤 **ФИО:** {appointment['client_name']}
+📞 **Телефон:** {appointment['client_phone']}
+📧 **Email:** {appointment.get('client_email', 'не указан')}
 """
         
-        if appointment.get('appointment_date') and appointment.get('appointment_time'):
-            msg += f"📅 Дата: {appointment['appointment_date']}\n"
-            msg += f"⏰ Время: {appointment['appointment_time']}\n"
+        # Дата и время (могут быть None для упрощенных заявок)
+        if appointment.get('appointment_date'):
+            msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
+        if appointment.get('appointment_time'):
+            msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
         
         if appointment.get('comment'):
-            msg += f"💬 Комментарий: {appointment['comment']}\n"
+            msg += f"💬 **Комментарий:** {appointment['comment']}\n"
         
-        msg += f"📊 Статус: {appointment['status']}\n"
-        msg += f"⏰ Создана: {appointment.get('created_at', 'неизвестно')}"
+        # Статус
+        status_emoji = {
+            'pending': '⏳',
+            'confirmed': '✅',
+            'cancelled': '❌',
+            'completed': '✔️'
+        }.get(appointment['status'], '❓')
         
-        await query.edit_message_text(
-            msg,
-            reply_markup=appointment_actions_keyboard(appointment_id)
-        )
+        msg += f"\n{status_emoji} **Статус:** {appointment['status']}"
+        
+        # Дата создания
+        created_at = appointment.get('created_at', 'неизвестно')
+        if created_at and isinstance(created_at, str):
+            # Если это строка из БД, можно форматировать
+            msg += f"\n⏰ **Создана:** {created_at}"
+        elif created_at:
+            msg += f"\n⏰ **Создана:** {created_at}"
+        
+        try:
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=appointment_actions_keyboard(appointment_id)
+            )
+        except Exception as e:
+            # Если ошибка с Markdown, пробуем без него
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Ошибка отправки деталей заявки: {e}")
+            await query.edit_message_text(
+                msg.replace('*', ''),
+                reply_markup=appointment_actions_keyboard(appointment_id)
+            )
     
     elif data.startswith('appt_confirm_'):
         appointment_id = int(data.split('_')[-1])
@@ -202,7 +259,23 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         
         await query.edit_message_text(
             "❓ Новые вопросы:",
-            reply_markup=questions_list_keyboard(questions)
+            reply_markup=questions_list_keyboard(questions, page=0)
+        )
+    
+    elif data.startswith('q_page_'):
+        # Обработка пагинации списка вопросов
+        page = int(data.split('_')[-1])
+        questions = await get_new_questions()
+        if not questions:
+            await query.edit_message_text(
+                "✅ Нет новых вопросов.",
+                reply_markup=None
+            )
+            return
+        
+        await query.edit_message_text(
+            f"❓ Новые вопросы (страница {page + 1}):",
+            reply_markup=questions_list_keyboard(questions, page=page)
         )
     
     elif data.startswith('q_detail_'):
