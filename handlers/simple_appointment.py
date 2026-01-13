@@ -59,9 +59,11 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     text = update.message.text
     
     # Если нет активного процесса записи, не обрабатываем
+    # Возвращаем None, чтобы другие обработчики могли обработать сообщение
     if state == 0:
         # Не обрабатываем, пусть другие обработчики попробуют
-        return
+        logger.info(f"process_simple_appointment: state=0, пропускаем сообщение '{text[:50]}'")
+        return None
     
     logger.info(f"process_simple_appointment: state={state}, text={text[:50]}")
     
