@@ -14,6 +14,7 @@ QUESTION_STATES = {
 
 async def question_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало процесса вопроса"""
+    # ConversationHandler сам управляет состоянием, но для unified_message_handler нужно установить question_state
     user_data = context.user_data
     user_data['question_state'] = QUESTION_STATES['waiting_question']
     
@@ -21,22 +22,24 @@ async def question_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❓ Задайте ваш вопрос:\n\nОпишите вашу ситуацию или задайте вопрос, и мы обязательно ответим.",
         reply_markup=back_to_main_keyboard()
     )
+    # Возвращаем состояние для ConversationHandler
+    return QUESTION_STATES['waiting_question']
 
 async def process_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка вопроса"""
+    from telegram.ext import ConversationHandler
     user_data = context.user_data
-    state = user_data.get('question_state', 0)
     text = update.message.text
     
-    if text == '🏠 Главное меню':
+    if text in ['🏠 Главное меню', '🔙 Главное меню']:
         user_data.clear()
         await update.message.reply_text(
             "🏠 Главное меню",
             reply_markup=main_menu_keyboard()
         )
-        return
+        return ConversationHandler.END
     
-    if state == QUESTION_STATES['waiting_question']:
+    # Обрабатываем вопрос
         # Получаем имя пользователя из Telegram профиля
         user = update.effective_user
         client_name = user.first_name or "Пользователь"
@@ -81,6 +84,8 @@ ID: {question_id}
             )
             
             user_data.clear()
+            # Завершаем ConversationHandler
+            return ConversationHandler.END
         except Exception as e:
             logger.error(f"Ошибка создания вопроса: {e}")
             await update.message.reply_text(
@@ -88,3 +93,4 @@ ID: {question_id}
                 reply_markup=main_menu_keyboard()
             )
             user_data.clear()
+            return ConversationHandler.END
