@@ -2,6 +2,9 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from database import add_user, is_admin
 from keyboards.main_menu import main_menu_keyboard
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -53,6 +56,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик возврата в главное меню"""
+    # ВАЖНО: очищаем все состояния пользователя при возврате в главное меню
+    user_data = context.user_data
+    old_keys = list(user_data.keys())
+    user_data.clear()
+    logger.info(f"main_menu_handler: очищены состояния пользователя {update.effective_user.id}, были ключи: {old_keys}")
+    
     user = update.effective_user
     is_user_admin = await is_admin(user.id)
     

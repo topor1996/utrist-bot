@@ -69,8 +69,9 @@ def main():
     # Обработчик команды /start
     application.add_handler(CommandHandler("start", start_handler))
     
-    # Обработчик главного меню
-    application.add_handler(MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler))
+    # Обработчик главного меню (ДОЛЖЕН БЫТЬ ПЕРЕД unified_message_handler!)
+    # Обрабатывает оба варианта: "🏠 Главное меню" и "🔙 Главное меню"
+    application.add_handler(MessageHandler(filters.Regex("^(🏠 Главное меню|🔙 Главное меню)$"), main_menu_handler))
     
     # Обработчик контактов и о компании
     application.add_handler(MessageHandler(filters.Regex("^📍 Контакты$"), contacts_handler))
