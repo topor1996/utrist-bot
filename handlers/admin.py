@@ -148,17 +148,29 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         appointment_id = int(data.split('_')[-1])
         appointment = await get_appointment_by_id(appointment_id)
         
+        if not appointment:
+            await query.answer("Заявка не найдена", show_alert=True)
+            return
+        
         msg = f"""
-📋 Запись #{appointment_id}
+📋 Заявка #{appointment_id}
 
-👤 Имя: {appointment['client_name']}
-📞 Телефон: {appointment['client_phone']}
-📅 Дата: {appointment['appointment_date']}
-⏰ Время: {appointment['appointment_time']}
 📝 Услуга: {appointment['service_type']}
-💬 Комментарий: {appointment['comment'] or 'нет'}
-📊 Статус: {appointment['status']}
+👤 ФИО: {appointment['client_name']}
+📞 Телефон: {appointment['client_phone']}
+📧 Email: {appointment.get('client_email', 'не указан')}
 """
+        
+        if appointment.get('appointment_date') and appointment.get('appointment_time'):
+            msg += f"📅 Дата: {appointment['appointment_date']}\n"
+            msg += f"⏰ Время: {appointment['appointment_time']}\n"
+        
+        if appointment.get('comment'):
+            msg += f"💬 Комментарий: {appointment['comment']}\n"
+        
+        msg += f"📊 Статус: {appointment['status']}\n"
+        msg += f"⏰ Создана: {appointment.get('created_at', 'неизвестно')}"
+        
         await query.edit_message_text(
             msg,
             reply_markup=appointment_actions_keyboard(appointment_id)

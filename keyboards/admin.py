@@ -17,12 +17,16 @@ def appointments_list_keyboard(appointments: list, page: int = 0, per_page: int 
     end = start + per_page
     
     for appointment in appointments[start:end]:
-        date_str = appointment['appointment_date']
-        time_str = appointment['appointment_time']
         name = appointment['client_name']
+        service = appointment['service_type'][:20] + '...' if len(appointment['service_type']) > 20 else appointment['service_type']
+        # Формируем текст кнопки
+        if appointment.get('appointment_date') and appointment.get('appointment_time'):
+            button_text = f"{appointment['appointment_date']} {appointment['appointment_time']} - {name}"
+        else:
+            button_text = f"{name} - {service}"
         keyboard.append([
             InlineKeyboardButton(
-                f"{date_str} {time_str} - {name}",
+                button_text,
                 callback_data=f"appt_detail_{appointment['id']}"
             )
         ])

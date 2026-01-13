@@ -10,6 +10,7 @@ SIMPLE_APPOINTMENT_STATES = {
     'waiting_name': 1,
     'waiting_phone': 2,
     'waiting_email': 3,
+    'waiting_confirm': 4,
 }
 
 def validate_email(email: str) -> bool:
@@ -111,50 +112,94 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             return
         
         user_data['simple_appointment']['client_email'] = text.strip()
+        user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_confirm']
         
-        # Создаем заявку
-        appointment_id = await create_appointment(
-            user_id=update.effective_user.id,
-            service_type=user_data['simple_appointment']['service_type'],
-            client_name=user_data['simple_appointment']['client_name'],
-            client_phone=user_data['simple_appointment']['client_phone'],
-            client_email=user_data['simple_appointment']['client_email']
-        )
-        
-        # Отправляем уведомление администраторам
-        appointment_info = f"""
-📋 **Новая заявка на услугу**
+        # Показываем данные для подтверждения
+        confirm_text = f"""
+✅ **Проверьте ваши данные:**
 
-🆔 ID: {appointment_id}
 📝 Услуга: {user_data['simple_appointment']['service_type']}
 👤 ФИО: {user_data['simple_appointment']['client_name']}
 📞 Телефон: {user_data['simple_appointment']['client_phone']}
 📧 Email: {user_data['simple_appointment']['client_email']}
-⏰ Дата создания: {update.message.date.strftime('%d.%m.%Y %H:%M')}
+
+Если все верно, нажмите кнопку "Отправить заявку" ниже.
 """
         
-        for admin_id in ADMIN_IDS:
-            try:
-                from keyboards.admin import appointment_actions_keyboard
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=appointment_info,
-                    parse_mode='Markdown',
-                    reply_markup=appointment_actions_keyboard(appointment_id)
-                )
-            except Exception as e:
-                print(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+        keyboard = [
+            [InlineKeyboardButton('✅ Отправить заявку', callback_data='submit_appointment')],
+            [InlineKeyboardButton('❌ Отменить', callback_data='cancel_appointment')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # Отправляем красивое сообщение клиенту
-        thank_you_text = f"""
+        await update.message.reply_text(
+            confirm_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    
+    elif state == SIMPLE_APPOINTMENT_STATES['waiting_confirm']:
+        # Это не должно происходить, но на всякий случай
+        await update.message.reply_text(
+            "Пожалуйста, используйте кнопки для подтверждения заявки."
+        )
+
+async def submit_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик отправки заявки"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_data = context.user_data
+    appointment_data = user_data.get('simple_appointment', {})
+    
+    if not appointment_data:
+        await query.edit_message_text("❌ Ошибка: данные заявки не найдены.")
+        return
+    
+    # Создаем заявку
+    appointment_id = await create_appointment(
+        user_id=update.effective_user.id,
+        service_type=appointment_data['service_type'],
+        client_name=appointment_data['client_name'],
+        client_phone=appointment_data['client_phone'],
+        client_email=appointment_data['client_email']
+    )
+    
+    # Отправляем уведомление администраторам
+    from datetime import datetime
+    appointment_info = f"""
+📋 **Новая заявка на услугу**
+
+🆔 ID: {appointment_id}
+📝 Услуга: {appointment_data['service_type']}
+👤 ФИО: {appointment_data['client_name']}
+📞 Телефон: {appointment_data['client_phone']}
+📧 Email: {appointment_data['client_email']}
+⏰ Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+"""
+    
+    for admin_id in ADMIN_IDS:
+        try:
+            from keyboards.admin import appointment_actions_keyboard
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=appointment_info,
+                parse_mode='Markdown',
+                reply_markup=appointment_actions_keyboard(appointment_id)
+            )
+        except Exception as e:
+            print(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+    
+    # Отправляем красивое сообщение клиенту
+    thank_you_text = f"""
 ✅ **Спасибо за вашу заявку!**
 
-Ваша заявка на услугу **"{user_data['simple_appointment']['service_type']}"** успешно принята.
+Ваша заявка на услугу **"{appointment_data['service_type']}"** успешно принята.
 
 📋 **Ваши данные:**
-👤 ФИО: {user_data['simple_appointment']['client_name']}
-📞 Телефон: {user_data['simple_appointment']['client_phone']}
-📧 Email: {user_data['simple_appointment']['client_email']}
+👤 ФИО: {appointment_data['client_name']}
+📞 Телефон: {appointment_data['client_phone']}
+📧 Email: {appointment_data['client_email']}
 
 Наш специалист свяжется с вами в ближайшее время для уточнения деталей.
 
@@ -162,19 +207,42 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 
 Спасибо, что выбрали нас! 🙏
 """
-        
-        # Кнопки
-        phone_clean = COMPANY_PHONE.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
-        keyboard = [
-            [InlineKeyboardButton('📞 Позвонить', url=f'tel:{phone_clean}')],
-            [InlineKeyboardButton('🔙 Назад к услугам', callback_data='back_to_services')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            thank_you_text,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        
-        user_data.clear()
+    
+    # Кнопки
+    phone_clean = COMPANY_PHONE.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
+    keyboard = [
+        [InlineKeyboardButton('📞 Позвонить', url=f'tel:{phone_clean}')],
+        [InlineKeyboardButton('🔙 Назад к услугам', callback_data='back_to_services')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "✅ Заявка отправлена!",
+        reply_markup=None
+    )
+    
+    await query.message.reply_text(
+        thank_you_text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    user_data.clear()
+
+async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик отмены заявки"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data.clear()
+    
+    await query.edit_message_text(
+        "❌ Заявка отменена.",
+        reply_markup=None
+    )
+    
+    from keyboards.services import services_keyboard
+    await query.message.reply_text(
+        "Выберите категорию услуг:",
+        reply_markup=services_keyboard()
+    )

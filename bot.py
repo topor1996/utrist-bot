@@ -32,6 +32,8 @@ from handlers import (
     process_appointment,
     process_simple_appointment,
     SIMPLE_APPOINTMENT_STATES,
+    submit_appointment_callback,
+    cancel_appointment_callback,
     question_handler,
     process_question,
     admin_handler,
@@ -123,6 +125,10 @@ def main():
     # Callback для услуг
     application.add_handler(CallbackQueryHandler(service_callback_handler, pattern="^(start_appointment|back_to_services)$"))
     
+    # Callback для отправки/отмены заявки
+    application.add_handler(CallbackQueryHandler(submit_appointment_callback, pattern="^submit_appointment$"))
+    application.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern="^cancel_appointment$"))
+    
     # Обработчик упрощенной записи (ConversationHandler)
     simple_appointment_conv = ConversationHandler(
         entry_points=[],  # Запускается через callback
@@ -134,6 +140,9 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
             ],
             SIMPLE_APPOINTMENT_STATES['waiting_email']: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
+            ],
+            SIMPLE_APPOINTMENT_STATES['waiting_confirm']: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
             ],
         },
