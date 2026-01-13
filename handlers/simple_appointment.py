@@ -72,7 +72,8 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     
     logger.info(f"process_simple_appointment: обрабатываем сообщение, state={state}, text={text[:50]}")
     
-    if text == '🏠 Главное меню':
+    # Проверяем возврат в главное меню ПЕРЕД обработкой состояния
+    if text in ['🏠 Главное меню', '🔙 Главное меню']:
         user_data.clear()
         await update.message.reply_text(
             "🏠 Главное меню",

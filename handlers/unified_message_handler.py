@@ -14,8 +14,14 @@ async def unified_message_handler(update: Update, context: ContextTypes.DEFAULT_
     """Универсальный обработчик сообщений - сначала проверяет процесс записи, потом выбор услуги"""
     user_data = context.user_data
     state = user_data.get('simple_appointment_state', 0)
+    question_state = user_data.get('question_state', 0)
     
-    logger.info(f"unified_message_handler вызван: state={state}, text='{update.message.text[:50]}'")
+    logger.info(f"unified_message_handler вызван: state={state}, question_state={question_state}, text='{update.message.text[:50]}'")
+    
+    # Если идет процесс вопроса, НЕ обрабатываем - пусть ConversationHandler обработает
+    if question_state != 0:
+        logger.info(f"unified_message_handler: идет процесс вопроса (question_state={question_state}), пропускаем")
+        return
     
     # Если идет процесс записи, обрабатываем через process_simple_appointment
     if state != 0:

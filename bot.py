@@ -90,16 +90,6 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^👤 Физическим лицам$"), individuals_handler))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к услугам$"), services_handler))
     
-    # Универсальный обработчик сообщений
-    # Объединяет логику process_simple_appointment и service_detail_handler
-    # Сначала проверяет, идет ли процесс записи, затем обрабатывает выбор услуги
-    application.add_handler(MessageHandler(
-        filters.TEXT & 
-        ~filters.COMMAND & 
-        ~filters.Regex("^(🏠 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
-        unified_message_handler
-    ))
-    
     # Обработчик записи на консультацию (ConversationHandler)
     appointment_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📞 Записаться на консультацию$"), appointment_handler)],
@@ -134,17 +124,27 @@ def main():
     application.add_handler(CallbackQueryHandler(submit_appointment_callback, pattern="^submit_appointment$"))
     application.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern="^cancel_appointment$"))
     
-    # Обработчик вопросов (ConversationHandler)
+    # Обработчик вопросов (ConversationHandler) - ДОЛЖЕН БЫТЬ ПЕРЕД unified_message_handler!
     question_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^❓ Задать вопрос$"), question_handler)],
         states={
             QUESTION_STATES['waiting_question']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_question)
+                MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню)$"), process_question)
             ],
         },
-        fallbacks=[MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler)],
+        fallbacks=[MessageHandler(filters.Regex("^(🏠 Главное меню|🔙 Главное меню)$"), main_menu_handler)],
     )
     application.add_handler(question_conv)
+    
+    # Универсальный обработчик сообщений
+    # Объединяет логику process_simple_appointment и service_detail_handler
+    # Сначала проверяет, идет ли процесс записи, затем обрабатывает выбор услуги
+    application.add_handler(MessageHandler(
+        filters.TEXT & 
+        ~filters.COMMAND & 
+        ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
+        unified_message_handler
+    ))
     
     # Обработчик админ-панели
     application.add_handler(CommandHandler("admin", admin_handler))
