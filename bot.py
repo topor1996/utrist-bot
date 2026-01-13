@@ -71,6 +71,17 @@ def main():
     # Обработчик главного меню
     application.add_handler(MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler))
     
+    # Обработчик контактов и о компании
+    application.add_handler(MessageHandler(filters.Regex("^📍 Контакты$"), contacts_handler))
+    application.add_handler(MessageHandler(filters.Regex("^ℹ️ О компании$"), about_handler))
+    
+    # Обработчик админ-панели (ДОЛЖЕН БЫТЬ ПЕРЕД универсальным обработчиком услуг!)
+    application.add_handler(MessageHandler(filters.Regex("^🔐 Админ-панель$"), admin_handler))
+    application.add_handler(MessageHandler(
+        filters.Regex("^(📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
+        admin_commands_handler
+    ))
+    
     # Обработчики услуг
     application.add_handler(MessageHandler(filters.Regex("^📋 Наши услуги$"), services_handler))
     application.add_handler(MessageHandler(filters.Regex("^👔 Юридическим лицам$"), legal_entities_handler))
@@ -78,19 +89,24 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^👤 Физическим лицам$"), individuals_handler))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к услугам$"), services_handler))
     
+    # Обработчик упрощенной записи (ДОЛЖЕН БЫТЬ ПЕРЕД универсальным обработчиком услуг!)
+    # Проверяет, есть ли активный процесс записи в user_data
+    application.add_handler(MessageHandler(
+        filters.TEXT & 
+        ~filters.COMMAND & 
+        ~filters.Regex("^(🏠 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
+        process_simple_appointment
+    ))
+    
     # Обработчики конкретных услуг (должны быть после обработчиков категорий)
     # Универсальный обработчик для всех услуг - ловит все, что не обработано выше
     # Используем отрицательный фильтр - все, что не является командами и не обработано выше
     application.add_handler(MessageHandler(
         filters.TEXT & 
         ~filters.COMMAND & 
-        ~filters.Regex("^(🏠 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель)$"),
+        ~filters.Regex("^(🏠 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
         service_detail_handler
     ))
-    
-    # Обработчик контактов и о компании
-    application.add_handler(MessageHandler(filters.Regex("^📍 Контакты$"), contacts_handler))
-    application.add_handler(MessageHandler(filters.Regex("^ℹ️ О компании$"), about_handler))
     
     # Обработчик записи на консультацию (ConversationHandler)
     appointment_conv = ConversationHandler(
@@ -128,27 +144,6 @@ def main():
     # Callback для отправки/отмены заявки
     application.add_handler(CallbackQueryHandler(submit_appointment_callback, pattern="^submit_appointment$"))
     application.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern="^cancel_appointment$"))
-    
-    # Обработчик упрощенной записи (ConversationHandler)
-    simple_appointment_conv = ConversationHandler(
-        entry_points=[],  # Запускается через callback
-        states={
-            SIMPLE_APPOINTMENT_STATES['waiting_name']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
-            ],
-            SIMPLE_APPOINTMENT_STATES['waiting_phone']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
-            ],
-            SIMPLE_APPOINTMENT_STATES['waiting_email']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
-            ],
-            SIMPLE_APPOINTMENT_STATES['waiting_confirm']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_simple_appointment)
-            ],
-        },
-        fallbacks=[MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler)],
-    )
-    application.add_handler(simple_appointment_conv)
     
     # Обработчик вопросов (ConversationHandler)
     question_conv = ConversationHandler(

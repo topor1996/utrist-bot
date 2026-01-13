@@ -55,6 +55,10 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     state = user_data.get('simple_appointment_state', 0)
     text = update.message.text
     
+    # Если нет активного процесса записи, не обрабатываем
+    if state == 0:
+        return
+    
     if text == '🏠 Главное меню':
         user_data.clear()
         await update.message.reply_text(
