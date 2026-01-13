@@ -224,6 +224,8 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "💬 Введите комментарий (или отправьте 'пропустить'):",
                 reply_markup=back_to_main_keyboard()
             )
+        except (ValueError, IndexError):
+            await update.message.reply_text("❌ Введите время в формате ЧЧ:ММ (например: 14:30):")
     
     elif state == APPOINTMENT_STATES['waiting_comment']:
         comment = None if text.lower() in ['пропустить', 'skip', ''] else text
