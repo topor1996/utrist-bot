@@ -93,7 +93,6 @@ async def admin_commands_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
     
     elif text == '📊 Статистика':
-        from database import get_pending_appointments, get_new_questions
         appointments = await get_pending_appointments()
         questions = await get_new_questions()
         

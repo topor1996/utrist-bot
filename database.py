@@ -107,7 +107,7 @@ async def get_pending_appointments() -> List[Dict]:
         async with db.execute(
             """SELECT * FROM appointments 
                WHERE status = 'pending'
-               ORDER BY appointment_date, appointment_time""",
+               ORDER BY created_at DESC""",
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
