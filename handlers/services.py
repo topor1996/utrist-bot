@@ -95,6 +95,12 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     """Обработчик выбора конкретной услуги"""
     service_name = update.message.text
     
+    # Проверяем, не идет ли процесс записи
+    state = context.user_data.get('simple_appointment_state', 0)
+    if state != 0:
+        logger.info(f"service_detail_handler: пропускаем, идет процесс записи (state={state})")
+        return None  # Пропускаем, пусть process_simple_appointment обработает
+    
     logger.info(f"service_detail_handler вызван для услуги: {service_name}")
     
     # Сохраняем выбранную услугу в контексте

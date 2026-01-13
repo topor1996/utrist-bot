@@ -80,10 +80,12 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 "❌ Пожалуйста, введите ваше полное имя (минимум 3 символа):"
             )
-            return
+            return SIMPLE_APPOINTMENT_STATES['waiting_name']
         
         user_data['simple_appointment']['client_name'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_phone']
+        
+        logger.info(f"ФИО получено: {text.strip()}, переходим к телефону. user_data = {user_data}")
         
         await update.message.reply_text(
             """
@@ -96,16 +98,19 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 """,
             parse_mode='Markdown'
         )
+        return SIMPLE_APPOINTMENT_STATES['waiting_phone']
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_phone']:
         if not validate_phone(text):
             await update.message.reply_text(
                 "❌ Пожалуйста, введите корректный номер телефона (минимум 10 цифр):"
             )
-            return
+            return SIMPLE_APPOINTMENT_STATES['waiting_phone']
         
         user_data['simple_appointment']['client_phone'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_email']
+        
+        logger.info(f"Телефон получен: {text.strip()}, переходим к email. user_data = {user_data}")
         
         await update.message.reply_text(
             """
@@ -115,13 +120,14 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 """,
             parse_mode='Markdown'
         )
+        return SIMPLE_APPOINTMENT_STATES['waiting_email']
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_email']:
         if not validate_email(text):
             await update.message.reply_text(
                 "❌ Пожалуйста, введите корректный email адрес (например: ivanov@example.com):"
             )
-            return
+            return SIMPLE_APPOINTMENT_STATES['waiting_email']
         
         user_data['simple_appointment']['client_email'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_confirm']
