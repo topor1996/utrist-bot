@@ -233,20 +233,112 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             )
     
     elif data.startswith('appt_confirm_'):
-        appointment_id = int(data.split('_')[-1])
+        try:
+            appointment_id = int(data.split('_')[-1])
+            logger.info(f"Подтверждение заявки с ID: {appointment_id}")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+            return
+        
         await update_appointment_status(appointment_id, 'confirmed')
         appointment = await get_appointment_by_id(appointment_id)
-        await query.edit_message_text(
-            f"✅ Запись подтверждена\n\n{appointment['client_name']} - {appointment['appointment_date']} {appointment['appointment_time']}"
-        )
+        
+        if not appointment:
+            await query.answer("❌ Заявка не найдена", show_alert=True)
+            return
+        
+        # Формируем сообщение с правильной информацией
+        msg = f"✅ **Запись подтверждена**\n\n"
+        msg += f"👤 **ФИО:** {appointment['client_name']}\n"
+        msg += f"📝 **Услуга:** {appointment['service_type']}\n"
+        msg += f"📞 **Телефон:** {appointment['client_phone']}\n"
+        
+        if appointment.get('client_email'):
+            msg += f"📧 **Email:** {appointment['client_email']}\n"
+        
+        if appointment.get('appointment_date') and appointment.get('appointment_time'):
+            msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
+            msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
+        else:
+            msg += f"📅 **Дата/время:** не указаны (заявка без конкретного времени)\n"
+        
+        try:
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения о подтверждении: {e}")
+            await query.edit_message_text(
+                msg.replace('*', '')
+            )
     
     elif data.startswith('appt_cancel_'):
-        appointment_id = int(data.split('_')[-1])
+        try:
+            appointment_id = int(data.split('_')[-1])
+            logger.info(f"Отмена заявки с ID: {appointment_id}")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+            return
+        
         await update_appointment_status(appointment_id, 'cancelled')
         appointment = await get_appointment_by_id(appointment_id)
-        await query.edit_message_text(
-            f"❌ Запись отменена\n\n{appointment['client_name']} - {appointment['appointment_date']} {appointment['appointment_time']}"
-        )
+        
+        if not appointment:
+            await query.answer("❌ Заявка не найдена", show_alert=True)
+            return
+        
+        # Формируем сообщение с правильной информацией
+        msg = f"❌ **Запись отменена**\n\n"
+        msg += f"👤 **ФИО:** {appointment['client_name']}\n"
+        msg += f"📝 **Услуга:** {appointment['service_type']}\n"
+        msg += f"📞 **Телефон:** {appointment['client_phone']}\n"
+        
+        if appointment.get('client_email'):
+            msg += f"📧 **Email:** {appointment['client_email']}\n"
+        
+        if appointment.get('appointment_date') and appointment.get('appointment_time'):
+            msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
+            msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
+        
+        try:
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения об отмене: {e}")
+            await query.edit_message_text(
+                msg.replace('*', '')
+            )
+    
+    elif data.startswith('appt_call_'):
+        # Показать телефон клиента
+        try:
+            appointment_id = int(data.split('_')[-1])
+            appointment = await get_appointment_by_id(appointment_id)
+            if appointment:
+                await query.answer(f"📞 Телефон: {appointment['client_phone']}", show_alert=True)
+            else:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+    
+    elif data.startswith('q_call_'):
+        # Показать телефон клиента для вопроса
+        try:
+            question_id = int(data.split('_')[-1])
+            question = await get_question_by_id(question_id)
+            if question and question.get('client_phone'):
+                await query.answer(f"📞 Телефон: {question['client_phone']}", show_alert=True)
+            else:
+                await query.answer("❌ Телефон не указан", show_alert=True)
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID вопроса из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID вопроса", show_alert=True)
     
     elif data == 'q_list':
         questions = await get_new_questions()

@@ -28,7 +28,6 @@ from handlers import (
     service_detail_handler,
     service_callback_handler,
     appointment_handler,
-    appointment_callback_handler,
     process_appointment,
     process_simple_appointment,
     SIMPLE_APPOINTMENT_STATES,
@@ -126,9 +125,6 @@ def main():
         fallbacks=[MessageHandler(filters.Regex("^🏠 Главное меню$"), main_menu_handler)],
     )
     application.add_handler(appointment_conv)
-    
-    # Callback для записей
-    application.add_handler(CallbackQueryHandler(appointment_callback_handler, pattern="^appt_"))
     
     # Callback для услуг
     application.add_handler(CallbackQueryHandler(service_callback_handler, pattern="^(start_appointment|back_to_services)$"))
