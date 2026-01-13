@@ -7,6 +7,9 @@ from keyboards.services import (
     individuals_keyboard
 )
 from keyboards.main_menu import main_menu_keyboard
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def services_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик раздела услуг"""
@@ -91,6 +94,12 @@ async def individuals_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора конкретной услуги"""
     service_name = update.message.text
+    
+    logger.info(f"service_detail_handler вызван для услуги: {service_name}")
+    
+    # Сохраняем выбранную услугу в контексте
+    context.user_data['selected_service'] = service_name
+    logger.info(f"Услуга сохранена в контексте: {service_name}")
     
     # Сохраняем выбранную услугу в контексте
     context.user_data['selected_service'] = service_name
@@ -248,19 +257,24 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    logger.info(f"Отправляем описание услуги с кнопками: {service_name}")
     await update.message.reply_text(
         info_text,
         reply_markup=reply_markup
     )
+    logger.info(f"Описание услуги отправлено: {service_name}")
 
 async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback от кнопок услуг"""
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"service_callback_handler вызван с data: {query.data}")
+    
     if query.data == 'start_appointment':
         # Получаем тип услуги из контекста
         service_type = context.user_data.get('selected_service', 'Консультация')
+        logger.info(f"Начинаем процесс записи для услуги: {service_type}")
         
         # Запускаем упрощенный процесс записи
         from .simple_appointment import start_simple_appointment, SIMPLE_APPOINTMENT_STATES
@@ -286,10 +300,12 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
 Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:
 """
         
+        logger.info(f"Отправляем запрос на ввод ФИО для услуги: {service_type}")
         await query.message.reply_text(
             text,
             parse_mode='Markdown'
         )
+        logger.info(f"Запрос на ввод ФИО отправлен. user_data = {context.user_data}")
         
     elif query.data == 'back_to_services':
         await query.edit_message_text(
