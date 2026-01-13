@@ -400,3 +400,28 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(
             f"❌ Вопрос закрыт\n\n{question['question_text'][:50]}..."
         )
+    
+    elif data.startswith('q_reply_'):
+        # Начинаем процесс ответа на вопрос
+        try:
+            question_id = int(data.split('_')[-1])
+            question = await get_question_by_id(question_id)
+            
+            if not question:
+                await query.answer("❌ Вопрос не найден", show_alert=True)
+                return
+            
+            # Сохраняем ID вопроса в контексте администратора
+            context.user_data['replying_to_question'] = question_id
+            context.user_data['replying_to_user'] = question['user_id']
+            
+            await query.edit_message_text(
+                f"💬 **Ответ на вопрос #{question_id}**\n\n"
+                f"Вопрос: {question['question_text']}\n\n"
+                f"Напишите ваш ответ. Он будет отправлен пользователю в личные сообщения.",
+                parse_mode='Markdown'
+            )
+            await query.answer("Напишите ответ на вопрос")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID вопроса из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID вопроса", show_alert=True)

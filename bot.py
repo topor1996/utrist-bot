@@ -38,6 +38,7 @@ from handlers import (
     admin_handler,
     admin_commands_handler,
     admin_callback_handler,
+    admin_reply_handler,
     contacts_handler,
     about_handler,
     unified_message_handler,
@@ -89,6 +90,13 @@ def main():
     application.add_handler(MessageHandler(filters.Regex("^👤 Физическим лицам$"), individuals_handler))
     application.add_handler(MessageHandler(filters.Regex("^🔙 Назад к услугам$"), services_handler))
     
+    # Обработчик ответа администратора на вопрос (ДОЛЖЕН БЫТЬ ПЕРЕД универсальным обработчиком!)
+    # Проверяет, идет ли процесс ответа на вопрос, и если да, обрабатывает ответ
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        admin_reply_handler
+    ))
+    
     # Универсальный обработчик сообщений
     # Объединяет логику process_simple_appointment и service_detail_handler
     # Сначала проверяет, идет ли процесс записи, затем обрабатывает выбор услуги
@@ -138,12 +146,6 @@ def main():
         entry_points=[MessageHandler(filters.Regex("^❓ Задать вопрос$"), question_handler)],
         states={
             QUESTION_STATES['waiting_question']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_question)
-            ],
-            QUESTION_STATES['waiting_name']: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_question)
-            ],
-            QUESTION_STATES['waiting_phone']: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_question)
             ],
         },

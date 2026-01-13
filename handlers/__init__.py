@@ -4,6 +4,7 @@ from .appointment import appointment_handler, appointment_callback_handler, proc
 from .simple_appointment import process_simple_appointment, SIMPLE_APPOINTMENT_STATES, submit_appointment_callback, cancel_appointment_callback
 from .question import question_handler, process_question
 from .admin import admin_handler, admin_commands_handler, admin_callback_handler
+from .admin_reply import admin_reply_handler
 from .contacts import contacts_handler, about_handler
 from .unified_message_handler import unified_message_handler
 
@@ -28,6 +29,7 @@ __all__ = [
     'admin_handler',
     'admin_commands_handler',
     'admin_callback_handler',
+    'admin_reply_handler',
     'contacts_handler',
     'about_handler',
     'unified_message_handler',

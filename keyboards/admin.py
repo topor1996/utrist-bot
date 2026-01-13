@@ -87,6 +87,7 @@ def appointment_actions_keyboard(appointment_id: int):
 def question_actions_keyboard(question_id: int):
     """Действия с вопросом"""
     keyboard = [
+        [InlineKeyboardButton('💬 Ответить', callback_data=f'q_reply_{question_id}')],
         [
             InlineKeyboardButton('✅ Отвечено', callback_data=f'q_answered_{question_id}'),
             InlineKeyboardButton('❌ Закрыть', callback_data=f'q_close_{question_id}')
