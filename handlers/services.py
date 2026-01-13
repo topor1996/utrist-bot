@@ -97,18 +97,21 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     # Проверяем, не идет ли процесс записи
     state = context.user_data.get('simple_appointment_state', 0)
-    if state != 0:
-        logger.info(f"service_detail_handler: пропускаем, идет процесс записи (state={state})")
-        return None  # Пропускаем, пусть process_simple_appointment обработает
+    simple_appointment = context.user_data.get('simple_appointment', {})
     
-    logger.info(f"service_detail_handler вызван для услуги: {service_name}")
+    logger.info(f"service_detail_handler вызван: service_name='{service_name}', state={state}, simple_appointment={simple_appointment}")
+    
+    if state != 0 or simple_appointment:
+        logger.info(f"service_detail_handler: пропускаем, идет процесс записи (state={state}, simple_appointment={bool(simple_appointment)})")
+        # Возвращаем None, чтобы другие обработчики могли обработать сообщение
+        # Но в python-telegram-bot это не останавливает обработку, поэтому нужно явно не обрабатывать
+        return None
+    
+    logger.info(f"service_detail_handler: обрабатываем выбор услуги: {service_name}")
     
     # Сохраняем выбранную услугу в контексте
     context.user_data['selected_service'] = service_name
     logger.info(f"Услуга сохранена в контексте: {service_name}")
-    
-    # Сохраняем выбранную услугу в контексте
-    context.user_data['selected_service'] = service_name
     
     # Информация об услугах
     service_info = {

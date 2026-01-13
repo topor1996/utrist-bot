@@ -58,6 +58,8 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     state = user_data.get('simple_appointment_state', 0)
     text = update.message.text
     
+    logger.info(f"process_simple_appointment вызван: state={state}, text='{text[:50]}', user_data keys={list(user_data.keys())}")
+    
     # Если нет активного процесса записи, не обрабатываем
     # Возвращаем None, чтобы другие обработчики могли обработать сообщение
     if state == 0:
@@ -65,7 +67,7 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         logger.info(f"process_simple_appointment: state=0, пропускаем сообщение '{text[:50]}'")
         return None
     
-    logger.info(f"process_simple_appointment: state={state}, text={text[:50]}")
+    logger.info(f"process_simple_appointment: обрабатываем сообщение, state={state}, text={text[:50]}")
     
     if text == '🏠 Главное меню':
         user_data.clear()
@@ -76,19 +78,28 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         return
     
     if state == SIMPLE_APPOINTMENT_STATES['waiting_name']:
+        logger.info(f"Обрабатываем ФИО: '{text}'")
         if len(text.strip()) < 3:
+            logger.warning(f"ФИО слишком короткое: '{text}'")
             await update.message.reply_text(
                 "❌ Пожалуйста, введите ваше полное имя (минимум 3 символа):"
             )
-            return SIMPLE_APPOINTMENT_STATES['waiting_name']
+            return None
+        
+        # Убеждаемся, что simple_appointment существует
+        if 'simple_appointment' not in user_data:
+            logger.error("simple_appointment не найден в user_data!")
+            user_data['simple_appointment'] = {}
         
         user_data['simple_appointment']['client_name'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_phone']
         
         logger.info(f"ФИО получено: {text.strip()}, переходим к телефону. user_data = {user_data}")
+        logger.info(f"Новое состояние: {user_data.get('simple_appointment_state')}")
         
-        await update.message.reply_text(
-            """
+        try:
+            await update.message.reply_text(
+                """
 📞 Отлично! Теперь введите ваш **номер телефона**:
 
 Можно в любом формате, например:
@@ -96,9 +107,15 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 • 8 (812) 123-45-67
 • 8121234567
 """,
-            parse_mode='Markdown'
-        )
-        return SIMPLE_APPOINTMENT_STATES['waiting_phone']
+                parse_mode='Markdown'
+            )
+            logger.info("Запрос на телефон отправлен успешно")
+        except Exception as e:
+            logger.error(f"Ошибка отправки запроса на телефон: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        return None
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_phone']:
         if not validate_phone(text):
