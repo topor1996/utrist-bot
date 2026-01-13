@@ -4,6 +4,9 @@ from database import create_appointment
 from keyboards.main_menu import main_menu_keyboard
 from config import ADMIN_IDS, COMPANY_PHONE
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Состояния для упрощенной записи
 SIMPLE_APPOINTMENT_STATES = {
@@ -60,7 +63,7 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         # Не обрабатываем, пусть другие обработчики попробуют
         return
     
-    print(f"DEBUG process_simple_appointment: state={state}, text={text[:50]}")
+    logger.info(f"process_simple_appointment: state={state}, text={text[:50]}")
     
     if text == '🏠 Главное меню':
         user_data.clear()
@@ -121,7 +124,7 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         user_data['simple_appointment']['client_email'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_confirm']
         
-        print(f"DEBUG: Email введен, показываем подтверждение. user_data = {user_data}")
+        logger.info(f"Email введен, показываем подтверждение. user_data = {user_data}")
         
         # Показываем данные для подтверждения
         confirm_text = f"""
@@ -147,7 +150,7 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             reply_markup=reply_markup
         )
         
-        print(f"DEBUG: Сообщение с кнопками отправлено")
+        logger.info("Сообщение с кнопками отправлено")
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_confirm']:
         # Это не должно происходить, но на всякий случай
@@ -163,12 +166,12 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
     user_data = context.user_data
     appointment_data = user_data.get('simple_appointment', {})
     
-    print(f"DEBUG: submit_appointment_callback вызван")
-    print(f"DEBUG: user_data = {user_data}")
-    print(f"DEBUG: appointment_data = {appointment_data}")
+    logger.info(f"submit_appointment_callback вызван")
+    logger.info(f"user_data = {user_data}")
+    logger.info(f"appointment_data = {appointment_data}")
     
     if not appointment_data:
-        print("DEBUG: appointment_data пустой!")
+        logger.error("appointment_data пустой!")
         await query.edit_message_text("❌ Ошибка: данные заявки не найдены. Пожалуйста, начните заново.")
         return
     
@@ -176,16 +179,17 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
     required_fields = ['service_type', 'client_name', 'client_phone', 'client_email']
     missing_fields = [field for field in required_fields if not appointment_data.get(field)]
     
-    print(f"DEBUG: Проверка полей. missing_fields = {missing_fields}")
-    print(f"DEBUG: appointment_data keys = {list(appointment_data.keys())}")
+    logger.info(f"Проверка полей. missing_fields = {missing_fields}")
+    logger.info(f"appointment_data keys = {list(appointment_data.keys())}")
     
     if missing_fields:
         error_msg = f"❌ Ошибка: не заполнены поля: {', '.join(missing_fields)}. Пожалуйста, начните заново."
-        print(f"DEBUG: {error_msg}")
+        logger.error(error_msg)
         await query.edit_message_text(error_msg)
         return
     
     try:
+        logger.info(f"Создаем заявку с данными: {appointment_data}")
         # Создаем заявку
         appointment_id = await create_appointment(
             user_id=query.from_user.id,
@@ -194,8 +198,11 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
             client_phone=appointment_data['client_phone'],
             client_email=appointment_data['client_email']
         )
+        logger.info(f"Заявка создана с ID: {appointment_id}")
     except Exception as e:
-        print(f"Ошибка создания заявки: {e}")
+        import traceback
+        logger.error(f"Ошибка создания заявки: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         await query.edit_message_text(
             "❌ Произошла ошибка при создании заявки. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
         )
@@ -227,10 +234,10 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
             )
             notification_sent = True
         except Exception as e:
-            print(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+            logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
     
     if not notification_sent and ADMIN_IDS:
-        print(f"ВНИМАНИЕ: Уведомление администраторам не отправлено! Проверьте ADMIN_IDS в настройках.")
+        logger.warning(f"ВНИМАНИЕ: Уведомление администраторам не отправлено! Проверьте ADMIN_IDS в настройках.")
     
     # Отправляем красивое сообщение клиенту
     thank_you_text = f"""
@@ -258,18 +265,34 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        "✅ Заявка отправлена!",
-        reply_markup=None
-    )
+    try:
+        await query.edit_message_text(
+            "✅ Заявка отправлена!",
+            reply_markup=None
+        )
+        logger.info("Сообщение 'Заявка отправлена' отредактировано")
+    except Exception as e:
+        logger.error(f"Ошибка редактирования сообщения: {e}")
     
-    await query.message.reply_text(
-        thank_you_text,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
+    try:
+        await query.message.reply_text(
+            thank_you_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        logger.info("Сообщение 'Спасибо' отправлено клиенту")
+    except Exception as e:
+        logger.error(f"Ошибка отправки сообщения клиенту: {e}")
+        # Пытаемся отправить хотя бы простое сообщение
+        try:
+            await query.message.reply_text(
+                "✅ Спасибо за вашу заявку! Наш специалист свяжется с вами в ближайшее время."
+            )
+        except:
+            pass
     
     user_data.clear()
+    logger.info("Заявка успешно обработана, user_data очищен")
 
 async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отмены заявки"""
