@@ -456,6 +456,8 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
 Наши специалисты ответят на все ваши вопросы и помогут решить задачу.
 """)
     
+    logger.info(f"Информация об услуге: найдена в словаре={service_name in service_info}, длина текста={len(info_text)}")
+    
     # Кнопки для действий
     keyboard = [
         [InlineKeyboardButton('📝 Оставить заявку', callback_data='start_appointment')],
@@ -464,11 +466,24 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     logger.info(f"Отправляем описание услуги с кнопками: {service_name}")
-    await update.message.reply_text(
-        info_text,
-        reply_markup=reply_markup
-    )
-    logger.info(f"Описание услуги отправлено: {service_name}")
+    try:
+        result = await update.message.reply_text(
+            info_text,
+            reply_markup=reply_markup
+        )
+        logger.info(f"Описание услуги отправлено успешно: {service_name}, message_id={result.message_id}")
+    except Exception as e:
+        logger.error(f"Ошибка отправки описания услуги '{service_name}': {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # Пытаемся отправить хотя бы простое сообщение
+        try:
+            await update.message.reply_text(
+                f"Услуга: {service_name}\n\nДля записи нажмите кнопку ниже.",
+                reply_markup=reply_markup
+            )
+        except Exception as e2:
+            logger.error(f"Критическая ошибка: не удалось отправить даже простое сообщение: {e2}")
 
 async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик callback от кнопок услуг"""
