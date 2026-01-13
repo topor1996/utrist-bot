@@ -1,12 +1,14 @@
 """
 Универсальный обработчик сообщений
 Объединяет логику process_simple_appointment и service_detail_handler
+Также обрабатывает ответы администратора на вопросы
 """
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
 from .simple_appointment import process_simple_appointment, SIMPLE_APPOINTMENT_STATES
 from .services import service_detail_handler
+from .admin_reply import admin_reply_handler
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,11 @@ async def unified_message_handler(update: Update, context: ContextTypes.DEFAULT_
     question_state = user_data.get('question_state', 0)
     
     logger.info(f"unified_message_handler вызван: state={state}, question_state={question_state}, text='{update.message.text[:50]}'")
+    
+    # Сначала проверяем, идет ли процесс ответа администратора на вопрос
+    if 'replying_to_question' in user_data:
+        logger.info(f"unified_message_handler: обнаружен процесс ответа администратора, передаем в admin_reply_handler")
+        return await admin_reply_handler(update, context)
     
     # Если идет процесс вопроса, НЕ обрабатываем - пусть ConversationHandler обработает
     # ConversationHandler должен быть ПЕРЕД unified_message_handler, поэтому он обработает сообщение первым
@@ -31,8 +38,12 @@ async def unified_message_handler(update: Update, context: ContextTypes.DEFAULT_
     # Если идет процесс записи, обрабатываем через process_simple_appointment
     if state != 0:
         logger.info(f"unified_message_handler: идет процесс записи (state={state}), обрабатываем через process_simple_appointment")
-        return await process_simple_appointment(update, context)
+        result = await process_simple_appointment(update, context)
+        logger.info(f"unified_message_handler: process_simple_appointment вернул {result}")
+        return result
     
     # Если нет процесса записи, обрабатываем через service_detail_handler
     logger.info(f"unified_message_handler: нет процесса записи, обрабатываем через service_detail_handler")
-    return await service_detail_handler(update, context)
+    result = await service_detail_handler(update, context)
+    logger.info(f"unified_message_handler: service_detail_handler вернул {result}")
+    return result

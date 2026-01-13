@@ -156,14 +156,6 @@ def main():
         unified_message_handler
     ))
     
-    # Обработчик ответа администратора на вопрос (ПОСЛЕ unified_message_handler!)
-    # Проверяет, идет ли процесс ответа на вопрос, и если да, обрабатывает ответ
-    # Если не идет процесс ответа, просто возвращается (не блокирует обработку)
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        admin_reply_handler
-    ))
-    
     # Callback для админ-панели
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_)"))
     
