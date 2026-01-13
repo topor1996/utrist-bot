@@ -11,7 +11,11 @@ async def admin_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Проверяем, идет ли процесс ответа на вопрос (быстрая проверка)
     if 'replying_to_question' not in user_data:
-        return  # Не обрабатываем, пусть другие обработчики попробуют
+        # Не обрабатываем, пусть другие обработчики попробуют
+        # В python-telegram-bot, если обработчик ничего не делает (не отправляет сообщения),
+        # обработка продолжается к следующему обработчику
+        logger.debug(f"admin_reply_handler: нет replying_to_question, пропускаем сообщение")
+        return
     
     user_id = update.effective_user.id
     
@@ -20,7 +24,8 @@ async def admin_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Если не администратор, но есть replying_to_question, очищаем (на всякий случай)
         user_data.pop('replying_to_question', None)
         user_data.pop('replying_to_user', None)
-        return  # Не обрабатываем, пусть другие обработчики попробуют
+        logger.debug(f"admin_reply_handler: пользователь {user_id} не администратор, пропускаем сообщение")
+        return
     
     question_id = user_data.get('replying_to_question')
     target_user_id = user_data.get('replying_to_user')

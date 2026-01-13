@@ -19,17 +19,13 @@ async def unified_message_handler(update: Update, context: ContextTypes.DEFAULT_
     logger.info(f"unified_message_handler вызван: state={state}, question_state={question_state}, text='{update.message.text[:50]}'")
     
     # Если идет процесс вопроса, НЕ обрабатываем - пусть ConversationHandler обработает
-    # В python-telegram-bot, если обработчик ничего не делает (не отправляет сообщения),
-    # обработка продолжается к следующему обработчику.
-    # Но если мы просто return, обработка может не продолжиться.
-    # Поэтому лучше использовать ConversationHandler.END, чтобы явно указать, что обработка завершена
-    # Но на самом деле, если мы ничего не делаем, обработка должна продолжиться.
-    # Проблема в том, что ConversationHandler должен быть ПЕРЕД unified_message_handler,
-    # но он стоит после. Нужно переместить его ПЕРЕД unified_message_handler.
+    # ConversationHandler должен быть ПЕРЕД unified_message_handler, поэтому он обработает сообщение первым
+    # Но на всякий случай проверяем question_state
     if question_state != 0:
         logger.info(f"unified_message_handler: идет процесс вопроса (question_state={question_state}), пропускаем - пусть ConversationHandler обработает")
-        # Не обрабатываем, но и не возвращаемся - просто ничего не делаем
-        # Это позволит ConversationHandler обработать сообщение
+        # Не обрабатываем - ConversationHandler должен обработать это сообщение
+        # В python-telegram-bot, если обработчик ничего не делает (не отправляет сообщения),
+        # обработка продолжается к следующему обработчику
         return
     
     # Если идет процесс записи, обрабатываем через process_simple_appointment
