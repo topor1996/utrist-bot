@@ -123,10 +123,30 @@ async def get_pending_appointments() -> List[Dict]:
     async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            """SELECT * FROM appointments 
+            """SELECT * FROM appointments
                WHERE status = 'pending'
                ORDER BY created_at DESC""",
         ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_appointments_by_status(status: str = None) -> List[Dict]:
+    """Получить заявки с фильтрацией по статусу (None = все)"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+
+        if status and status != 'all':
+            query = """SELECT * FROM appointments
+                       WHERE status = ?
+                       ORDER BY created_at DESC"""
+            params = (status,)
+        else:
+            query = """SELECT * FROM appointments
+                       ORDER BY created_at DESC"""
+            params = ()
+
+        async with db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 

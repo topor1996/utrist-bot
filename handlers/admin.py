@@ -3,11 +3,12 @@ from telegram.ext import ContextTypes
 from database import (
     is_admin, get_pending_appointments, get_new_questions, get_appointments_by_date,
     update_appointment_status, update_question_status, get_appointment_by_id, get_question_by_id,
-    get_appointment_history
+    get_appointment_history, get_appointments_by_status
 )
 from keyboards.admin import (
     admin_keyboard, appointments_list_keyboard, questions_list_keyboard,
-    appointment_actions_keyboard, question_actions_keyboard, export_keyboard
+    appointment_actions_keyboard, question_actions_keyboard, export_keyboard,
+    all_appointments_filter_keyboard, all_appointments_list_keyboard, all_appointment_actions_keyboard
 )
 from keyboards.main_menu import main_menu_keyboard
 from utils.export import export_appointments_csv, export_questions_csv, format_history_entry
@@ -122,6 +123,14 @@ async def admin_commands_handler(update: Update, context: ContextTypes.DEFAULT_T
             "📥 **Экспорт данных**\n\nВыберите, что экспортировать:",
             parse_mode='Markdown',
             reply_markup=export_keyboard()
+        )
+
+    elif text == '📁 Все заявки':
+        # Показываем фильтр для выбора статуса
+        await update.message.reply_text(
+            "📁 **Все заявки**\n\nВыберите фильтр по статусу:",
+            parse_mode='Markdown',
+            reply_markup=all_appointments_filter_keyboard()
         )
 
 async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -567,3 +576,299 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         except Exception as e:
             logger.error(f"Ошибка экспорта: {e}")
             await query.edit_message_text(f"❌ Ошибка экспорта: {e}", reply_markup=None)
+
+    # ========== ВСЕ ЗАЯВКИ ==========
+
+    elif data == 'allappt_filters':
+        # Показать фильтры
+        await query.edit_message_text(
+            "📁 **Все заявки**\n\nВыберите фильтр по статусу:",
+            parse_mode='Markdown',
+            reply_markup=all_appointments_filter_keyboard()
+        )
+
+    elif data.startswith('allappt_filter_'):
+        # Применить фильтр по статусу
+        status_filter = data.replace('allappt_filter_', '')
+        context.user_data['allappt_filter'] = status_filter
+
+        appointments = await get_appointments_by_status(status_filter if status_filter != 'all' else None)
+
+        if not appointments:
+            status_names = {
+                'all': 'всех',
+                'pending': 'ожидающих',
+                'confirmed': 'подтверждённых',
+                'payment_sent': 'в оплате',
+                'completed': 'завершённых',
+                'cancelled': 'отменённых'
+            }
+            await query.edit_message_text(
+                f"📁 Нет {status_names.get(status_filter, '')} заявок.",
+                reply_markup=all_appointments_filter_keyboard()
+            )
+            return
+
+        status_titles = {
+            'all': '📁 Все заявки',
+            'pending': '⏳ Ожидающие заявки',
+            'confirmed': '✅ Подтверждённые заявки',
+            'payment_sent': '💳 Заявки в оплате',
+            'completed': '✔️ Завершённые заявки',
+            'cancelled': '❌ Отменённые заявки'
+        }
+
+        await query.edit_message_text(
+            f"{status_titles.get(status_filter, '📁 Заявки')} ({len(appointments)}):",
+            reply_markup=all_appointments_list_keyboard(appointments, page=0, status_filter=status_filter)
+        )
+
+    elif data.startswith('allappt_page_'):
+        # Пагинация в разделе "Все заявки"
+        parts = data.split('_')
+        status_filter = parts[2]
+        page = int(parts[3])
+
+        appointments = await get_appointments_by_status(status_filter if status_filter != 'all' else None)
+
+        if not appointments:
+            await query.edit_message_text(
+                "📁 Нет заявок.",
+                reply_markup=all_appointments_filter_keyboard()
+            )
+            return
+
+        await query.edit_message_text(
+            f"📁 Заявки (страница {page + 1}):",
+            reply_markup=all_appointments_list_keyboard(appointments, page=page, status_filter=status_filter)
+        )
+
+    elif data.startswith('allappt_detail_'):
+        # Детали заявки в разделе "Все заявки"
+        try:
+            appointment_id = int(data.split('_')[-1])
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+            return
+
+        appointment = await get_appointment_by_id(appointment_id)
+
+        if not appointment:
+            await query.answer("❌ Заявка не найдена", show_alert=True)
+            return
+
+        # Формируем сообщение с деталями заявки
+        msg = f"""📋 **Заявка #{appointment_id}**
+
+📝 **Услуга:** {appointment['service_type']}
+👤 **ФИО:** {appointment['client_name']}
+📞 **Телефон:** {appointment['client_phone']}
+📧 **Email:** {appointment.get('client_email', 'не указан')}
+"""
+
+        if appointment.get('appointment_date'):
+            msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
+        if appointment.get('appointment_time'):
+            msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
+
+        if appointment.get('comment'):
+            msg += f"💬 **Комментарий:** {appointment['comment']}\n"
+
+        # Статус
+        status_emoji = {
+            'pending': '⏳',
+            'confirmed': '✅',
+            'cancelled': '❌',
+            'completed': '✔️',
+            'payment_sent': '💳'
+        }.get(appointment['status'], '❓')
+
+        status_text = {
+            'pending': 'Ожидает',
+            'confirmed': 'Подтверждена',
+            'cancelled': 'Отменена',
+            'completed': 'Завершена',
+            'payment_sent': 'Отправлена в оплату'
+        }.get(appointment['status'], appointment['status'])
+
+        msg += f"\n{status_emoji} **Статус:** {status_text}"
+
+        created_at = appointment.get('created_at', 'неизвестно')
+        if created_at:
+            msg += f"\n⏰ **Создана:** {created_at}"
+
+        try:
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=all_appointment_actions_keyboard(appointment_id, appointment['status'])
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки деталей заявки: {e}")
+            await query.edit_message_text(
+                msg.replace('*', ''),
+                reply_markup=all_appointment_actions_keyboard(appointment_id, appointment['status'])
+            )
+
+    elif data == 'allappt_back_to_list':
+        # Вернуться к списку заявок
+        status_filter = context.user_data.get('allappt_filter', 'all')
+        appointments = await get_appointments_by_status(status_filter if status_filter != 'all' else None)
+
+        if not appointments:
+            await query.edit_message_text(
+                "📁 Нет заявок.",
+                reply_markup=all_appointments_filter_keyboard()
+            )
+            return
+
+        await query.edit_message_text(
+            f"📁 Заявки ({len(appointments)}):",
+            reply_markup=all_appointments_list_keyboard(appointments, page=0, status_filter=status_filter)
+        )
+
+    elif data.startswith('allappt_confirm_'):
+        # Подтвердить заявку из раздела "Все заявки"
+        try:
+            appointment_id = int(data.split('_')[-1])
+        except (ValueError, IndexError):
+            await query.answer("❌ Ошибка: неверный ID", show_alert=True)
+            return
+
+        await update_appointment_status(appointment_id, 'confirmed', changed_by=user_id)
+        await query.answer("✅ Заявка подтверждена")
+
+        # Обновляем отображение
+        appointment = await get_appointment_by_id(appointment_id)
+        if appointment:
+            msg = f"✅ **Заявка #{appointment_id} подтверждена**\n\n"
+            msg += f"👤 {appointment['client_name']}\n"
+            msg += f"📝 {appointment['service_type']}"
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=all_appointment_actions_keyboard(appointment_id, 'confirmed')
+            )
+
+    elif data.startswith('allappt_cancel_'):
+        # Отменить заявку из раздела "Все заявки"
+        try:
+            appointment_id = int(data.split('_')[-1])
+        except (ValueError, IndexError):
+            await query.answer("❌ Ошибка: неверный ID", show_alert=True)
+            return
+
+        await update_appointment_status(appointment_id, 'cancelled', changed_by=user_id)
+        await query.answer("❌ Заявка отменена")
+
+        appointment = await get_appointment_by_id(appointment_id)
+        if appointment:
+            msg = f"❌ **Заявка #{appointment_id} отменена**\n\n"
+            msg += f"👤 {appointment['client_name']}\n"
+            msg += f"📝 {appointment['service_type']}"
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=all_appointment_actions_keyboard(appointment_id, 'cancelled')
+            )
+
+    elif data.startswith('allappt_complete_'):
+        # Завершить заявку
+        try:
+            appointment_id = int(data.split('_')[-1])
+        except (ValueError, IndexError):
+            await query.answer("❌ Ошибка: неверный ID", show_alert=True)
+            return
+
+        await update_appointment_status(appointment_id, 'completed', changed_by=user_id)
+        await query.answer("✔️ Заявка завершена")
+
+        appointment = await get_appointment_by_id(appointment_id)
+        if appointment:
+            msg = f"✔️ **Заявка #{appointment_id} завершена**\n\n"
+            msg += f"👤 {appointment['client_name']}\n"
+            msg += f"📝 {appointment['service_type']}"
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=all_appointment_actions_keyboard(appointment_id, 'completed')
+            )
+
+    elif data.startswith('allappt_payment_'):
+        # Отправить в оплату из раздела "Все заявки"
+        try:
+            appointment_id = int(data.split('_')[-1])
+            appointment = await get_appointment_by_id(appointment_id)
+
+            if not appointment:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+                return
+
+            # Сохраняем данные для оплаты в контексте
+            context.user_data['payment_appointment_id'] = appointment_id
+            context.user_data['payment_user_id'] = appointment['user_id']
+            context.user_data['payment_state'] = 'waiting_amount'
+            context.user_data['payment_service'] = appointment['service_type']
+            context.user_data['payment_client_name'] = appointment['client_name']
+            context.user_data['payment_from_allappt'] = True  # Флаг, что пришли из "Все заявки"
+
+            await query.edit_message_text(
+                f"💳 **Отправка в оплату**\n\n"
+                f"📋 Заявка #{appointment_id}\n"
+                f"👤 Клиент: {appointment['client_name']}\n"
+                f"📝 Услуга: {appointment['service_type']}\n\n"
+                f"Введите сумму к оплате (только число, например: 7000):\n\n"
+                f"Для отмены нажмите /admin",
+                parse_mode='Markdown'
+            )
+            await query.answer("Введите сумму к оплате")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+
+    elif data.startswith('allappt_call_'):
+        # Показать телефон клиента
+        try:
+            appointment_id = int(data.split('_')[-1])
+            appointment = await get_appointment_by_id(appointment_id)
+            if appointment:
+                await query.answer(f"📞 Телефон: {appointment['client_phone']}", show_alert=True)
+            else:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+        except (ValueError, IndexError):
+            await query.answer("❌ Ошибка: неверный ID", show_alert=True)
+
+    elif data.startswith('allappt_history_'):
+        # История изменений заявки
+        try:
+            appointment_id = int(data.split('_')[-1])
+            history = await get_appointment_history(appointment_id)
+            appointment = await get_appointment_by_id(appointment_id)
+
+            if not appointment:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+                return
+
+            msg = f"📜 **История заявки #{appointment_id}**\n\n"
+            msg += f"👤 {appointment['client_name']}\n"
+            msg += f"📝 {appointment['service_type']}\n\n"
+
+            if history:
+                msg += "**Изменения статуса:**\n"
+                for entry in history:
+                    msg += format_history_entry(entry) + "\n"
+            else:
+                msg += "_История изменений пуста_"
+
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = [[InlineKeyboardButton('🔙 Назад к заявке', callback_data=f'allappt_detail_{appointment_id}')]]
+
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)

@@ -141,7 +141,7 @@ def main():
     # Обработчик админ-панели (ДОЛЖЕН БЫТЬ ПЕРЕД универсальным обработчиком услуг!)
     application.add_handler(MessageHandler(filters.Regex("^🔐 Админ-панель$"), admin_handler))
     application.add_handler(MessageHandler(
-        filters.Regex("^(📋 Новые заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
+        filters.Regex("^(📋 Новые заявки|📁 Все заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
         admin_commands_handler
     ))
     
@@ -209,12 +209,12 @@ def main():
     application.add_handler(MessageHandler(
         filters.TEXT &
         ~filters.COMMAND &
-        ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|📝 Мои записи|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
+        ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|📝 Мои записи|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📁 Все заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
         unified_message_handler
     ))
     
-    # Callback для админ-панели (admin_, appt_, q_, export_)
-    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_|export_)"))
+    # Callback для админ-панели (admin_, appt_, q_, export_, allappt_)
+    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_|export_|allappt_)"))
     
     # Принудительный сброс сессии и удаление webhook перед запуском
     import httpx
