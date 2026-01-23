@@ -4,6 +4,8 @@ Telegram бот для юридической компании "Ваш юрис�
 """
 
 import asyncio
+import signal
+import sys
 import logging
 from telegram import Update
 from telegram.ext import (
@@ -20,6 +22,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from database import init_db
 from middleware import rate_limit_middleware
+from healthcheck import set_bot_started, set_bot_stopped, update_last_activity, start_health_server, stop_health_server
 from handlers import (
     start_handler,
     main_menu_handler,
@@ -61,16 +64,40 @@ def main():
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Инициализация БД
+    # Хранилище для health check runner
+    health_runner = None
+
+    # Инициализация БД и health check
     async def post_init(app: Application) -> None:
+        nonlocal health_runner
         await init_db()
         logger.info("База данных инициализирована")
-    
+
+        # Запускаем health check сервер
+        try:
+            health_runner = await start_health_server(port=8080)
+            set_bot_started()
+        except Exception as e:
+            logger.warning(f"Не удалось запустить health check сервер: {e}")
+
     application.post_init = post_init
+
+    # Graceful shutdown
+    async def post_shutdown(app: Application) -> None:
+        nonlocal health_runner
+        set_bot_stopped()
+        if health_runner:
+            await stop_health_server(health_runner)
+        logger.info("Бот остановлен корректно")
+
+    application.post_shutdown = post_shutdown
 
     # Rate limiting middleware - первый обработчик для защиты от спама
     async def rate_limit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обработчик для проверки rate limit"""
+        # Обновляем время последней активности для health check
+        update_last_activity()
+
         if await rate_limit_middleware(update, context):
             # Если лимит превышен, прерываем обработку
             raise ApplicationHandlerStop()
@@ -166,9 +193,23 @@ def main():
     # Callback для админ-панели
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_)"))
     
-    # Запуск бота
+    # Запуск бота с обработкой сигналов для graceful shutdown
     logger.info("Бот запущен")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    # run_polling уже обрабатывает SIGINT и SIGTERM корректно
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,  # Игнорируем сообщения, пришедшие пока бот был выключен
+        close_loop=False  # Не закрываем event loop автоматически
+    )
+
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("Получен сигнал завершения (Ctrl+C)")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}")
+        sys.exit(1)

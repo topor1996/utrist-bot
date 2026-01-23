@@ -15,6 +15,12 @@ def back_to_main_keyboard():
     keyboard = [[KeyboardButton('🏠 Главное меню')]]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
+def cancel_keyboard():
+    """Клавиатура с кнопкой отмены для процесса записи"""
+    keyboard = [[KeyboardButton('❌ Отменить запись')]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 def contact_keyboard():
     """Клавиатура с контактами"""
     keyboard = [

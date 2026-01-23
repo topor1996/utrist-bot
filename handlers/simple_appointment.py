@@ -1,9 +1,9 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from database import create_appointment
-from keyboards.main_menu import main_menu_keyboard
+from keyboards.main_menu import main_menu_keyboard, cancel_keyboard
 from config import ADMIN_IDS, COMPANY_PHONE
-import re
+from utils.validators import validate_phone as validate_phone_util, validate_email as validate_email_util
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,19 +15,6 @@ SIMPLE_APPOINTMENT_STATES = {
     'waiting_email': 3,
     'waiting_confirm': 4,
 }
-
-def validate_email(email: str) -> bool:
-    """Проверка валидности email"""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
-
-def validate_phone(phone: str) -> bool:
-    """Проверка валидности телефона"""
-    # Убираем все нецифровые символы кроме +
-    cleaned = re.sub(r'[^\d+]', '', phone)
-    # Проверяем, что есть хотя бы 10 цифр
-    digits = re.sub(r'[^\d]', '', cleaned)
-    return len(digits) >= 10
 
 async def start_simple_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE, service_type: str):
     """Начало упрощенного процесса записи"""
@@ -72,13 +59,19 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
     
     logger.info(f"process_simple_appointment: обрабатываем сообщение, state={state}, text={text[:50]}")
     
-    # Проверяем возврат в главное меню ПЕРЕД обработкой состояния
-    if text in ['🏠 Главное меню', '🔙 Главное меню']:
+    # Проверяем отмену записи или возврат в главное меню ПЕРЕД обработкой состояния
+    if text in ['🏠 Главное меню', '🔙 Главное меню', '❌ Отменить запись']:
         user_data.clear()
-        await update.message.reply_text(
-            "🏠 Главное меню",
-            reply_markup=main_menu_keyboard()
-        )
+        if text == '❌ Отменить запись':
+            await update.message.reply_text(
+                "❌ Запись отменена.\n\n🏠 Главное меню",
+                reply_markup=main_menu_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "🏠 Главное меню",
+                reply_markup=main_menu_keyboard()
+            )
         return
     
     if state == SIMPLE_APPOINTMENT_STATES['waiting_name']:
@@ -111,7 +104,8 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 • 8 (812) 123-45-67
 • 8121234567
 """,
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=cancel_keyboard()
             )
             logger.info("Запрос на телефон отправлен успешно")
         except Exception as e:
@@ -120,16 +114,18 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             logger.error(traceback.format_exc())
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_phone']:
-        if not validate_phone(text):
+        is_valid, result = validate_phone_util(text)
+        if not is_valid:
             await update.message.reply_text(
-                "❌ Пожалуйста, введите корректный номер телефона (минимум 10 цифр):"
+                f"❌ {result}\n\nПожалуйста, введите корректный номер телефона:"
             )
             return SIMPLE_APPOINTMENT_STATES['waiting_phone']
-        
-        user_data['simple_appointment']['client_phone'] = text.strip()
+
+        # result содержит отформатированный номер
+        user_data['simple_appointment']['client_phone'] = result
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_email']
-        
-        logger.info(f"Телефон получен: {text.strip()}, переходим к email. user_data = {user_data}")
+
+        logger.info(f"Телефон получен: {result}, переходим к email. user_data = {user_data}")
         
         await update.message.reply_text(
             """
@@ -137,18 +133,21 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
 
 Например: ivanov@example.com
 """,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=cancel_keyboard()
         )
         return SIMPLE_APPOINTMENT_STATES['waiting_email']
     
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_email']:
-        if not validate_email(text):
+        is_valid, result = validate_email_util(text)
+        if not is_valid:
             await update.message.reply_text(
-                "❌ Пожалуйста, введите корректный email адрес (например: ivanov@example.com):"
+                f"❌ {result}\n\nПожалуйста, введите корректный email адрес:"
             )
             return SIMPLE_APPOINTMENT_STATES['waiting_email']
-        
-        user_data['simple_appointment']['client_email'] = text.strip()
+
+        # result содержит нормализованный email
+        user_data['simple_appointment']['client_email'] = result
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_confirm']
         
         logger.info(f"Email введен, показываем подтверждение. user_data = {user_data}")
