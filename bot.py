@@ -6,8 +6,10 @@ Telegram бот для юридической компании "Ваш юрис�
 import asyncio
 import signal
 import sys
+import time
 import logging
 from telegram import Update
+from telegram.error import Conflict
 from telegram.ext import (
     Application,
     ApplicationHandlerStop,
@@ -214,6 +216,11 @@ def main():
     # Callback для админ-панели (admin_, appt_, q_, export_)
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_|export_)"))
     
+    # Задержка перед запуском для завершения старых контейнеров
+    startup_delay = 15
+    logger.info(f"Ожидание {startup_delay} секунд перед запуском polling (для завершения старых инстансов)...")
+    time.sleep(startup_delay)
+
     # Запуск бота с обработкой сигналов для graceful shutdown
     logger.info("Бот запущен")
 
