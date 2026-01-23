@@ -126,7 +126,7 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     # Получаем информацию об услуге из data/prices.py
     info_text = get_service_info(service_name)
     
-    logger.info(f"Информация об услуге: найдена в словаре={service_name in service_info}, длина текста={len(info_text)}")
+    logger.info(f"Информация об услуге: длина текста={len(info_text)}")
     
     # Кнопки для действий
     keyboard = [
