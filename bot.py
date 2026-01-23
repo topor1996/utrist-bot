@@ -47,7 +47,10 @@ from handlers import (
     contacts_handler,
     about_handler,
     unified_message_handler,
+    help_handler,
+    menu_handler,
 )
+from scheduler import start_reminder_scheduler, stop_reminder_scheduler
 from handlers.appointment import APPOINTMENT_STATES
 from handlers.question import QUESTION_STATES
 
@@ -64,12 +67,13 @@ def main():
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Хранилище для health check runner
+    # Хранилище для health check runner и планировщика
     health_runner = None
+    reminder_task = None
 
     # Инициализация БД и health check
     async def post_init(app: Application) -> None:
-        nonlocal health_runner
+        nonlocal health_runner, reminder_task
         await init_db()
         logger.info("База данных инициализирована")
 
@@ -80,12 +84,21 @@ def main():
         except Exception as e:
             logger.warning(f"Не удалось запустить health check сервер: {e}")
 
+        # Запускаем планировщик напоминаний
+        try:
+            reminder_task = start_reminder_scheduler(app)
+            logger.info("Планировщик напоминаний запущен")
+        except Exception as e:
+            logger.warning(f"Не удалось запустить планировщик напоминаний: {e}")
+
     application.post_init = post_init
 
     # Graceful shutdown
     async def post_shutdown(app: Application) -> None:
-        nonlocal health_runner
+        nonlocal health_runner, reminder_task
         set_bot_stopped()
+        if reminder_task:
+            stop_reminder_scheduler(reminder_task)
         if health_runner:
             await stop_health_server(health_runner)
         logger.info("Бот остановлен корректно")
@@ -106,6 +119,10 @@ def main():
 
     # Обработчик команды /start
     application.add_handler(CommandHandler("start", start_handler))
+
+    # Команды /help и /menu
+    application.add_handler(CommandHandler("help", help_handler))
+    application.add_handler(CommandHandler("menu", menu_handler))
     
     # Обработчик главного меню (ДОЛЖЕН БЫТЬ ПЕРЕД unified_message_handler!)
     # Обрабатывает оба варианта: "🏠 Главное меню" и "🔙 Главное меню"
@@ -118,7 +135,7 @@ def main():
     # Обработчик админ-панели (ДОЛЖЕН БЫТЬ ПЕРЕД универсальным обработчиком услуг!)
     application.add_handler(MessageHandler(filters.Regex("^🔐 Админ-панель$"), admin_handler))
     application.add_handler(MessageHandler(
-        filters.Regex("^(📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
+        filters.Regex("^(📋 Новые заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
         admin_commands_handler
     ))
     
@@ -184,14 +201,14 @@ def main():
     # Сначала проверяет, идет ли процесс записи, затем обрабатывает выбор услуги
     # НО: не обрабатывает сообщения, если идет процесс вопроса (question_state != 0)
     application.add_handler(MessageHandler(
-        filters.TEXT & 
-        ~filters.COMMAND & 
-        ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
+        filters.TEXT &
+        ~filters.COMMAND &
+        ~filters.Regex("^(🏠 Главное меню|🔙 Главное меню|📋 Наши услуги|👔 Юридическим лицам|💼 Предпринимателям|👤 Физическим лицам|🔙 Назад к услугам|📍 Контакты|ℹ️ О компании|📞 Записаться на консультацию|❓ Задать вопрос|🔐 Админ-панель|📋 Новые заявки|📅 Календарь записей|📊 Статистика|📥 Экспорт данных)$"),
         unified_message_handler
     ))
     
-    # Callback для админ-панели
-    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_)"))
+    # Callback для админ-панели (admin_, appt_, q_, export_)
+    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_|export_)"))
     
     # Запуск бота с обработкой сигналов для graceful shutdown
     logger.info("Бот запущен")

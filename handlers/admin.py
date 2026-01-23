@@ -1,10 +1,17 @@
-from telegram import Update
+from telegram import Update, InputFile
 from telegram.ext import ContextTypes
-from database import is_admin, get_pending_appointments, get_new_questions, get_appointments_by_date
-from keyboards.admin import admin_keyboard, appointments_list_keyboard, questions_list_keyboard, appointment_actions_keyboard, question_actions_keyboard
+from database import (
+    is_admin, get_pending_appointments, get_new_questions, get_appointments_by_date,
+    update_appointment_status, update_question_status, get_appointment_by_id, get_question_by_id,
+    get_appointment_history
+)
+from keyboards.admin import (
+    admin_keyboard, appointments_list_keyboard, questions_list_keyboard,
+    appointment_actions_keyboard, question_actions_keyboard, export_keyboard
+)
 from keyboards.main_menu import main_menu_keyboard
+from utils.export import export_appointments_csv, export_questions_csv, format_history_entry
 from datetime import date, timedelta
-from database import update_appointment_status, update_question_status, get_appointment_by_id, get_question_by_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -98,7 +105,7 @@ async def admin_commands_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif text == '📊 Статистика':
         appointments = await get_pending_appointments()
         questions = await get_new_questions()
-        
+
         msg = f"""
 📊 Статистика
 
@@ -108,6 +115,13 @@ async def admin_commands_handler(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(
             msg,
             reply_markup=admin_keyboard()
+        )
+
+    elif text == '📥 Экспорт данных':
+        await update.message.reply_text(
+            "📥 **Экспорт данных**\n\nВыберите, что экспортировать:",
+            parse_mode='Markdown',
+            reply_markup=export_keyboard()
         )
 
 async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -247,8 +261,8 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
             await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
             return
-        
-        await update_appointment_status(appointment_id, 'confirmed')
+
+        await update_appointment_status(appointment_id, 'confirmed', changed_by=user_id)
         appointment = await get_appointment_by_id(appointment_id)
         
         if not appointment:
@@ -289,8 +303,8 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
             await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
             return
-        
-        await update_appointment_status(appointment_id, 'cancelled')
+
+        await update_appointment_status(appointment_id, 'cancelled', changed_by=user_id)
         appointment = await get_appointment_by_id(appointment_id)
         
         if not appointment:
@@ -466,3 +480,90 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         except (ValueError, IndexError) as e:
             logger.error(f"Ошибка парсинга ID вопроса из '{data}': {e}")
             await query.answer("❌ Ошибка: неверный ID вопроса", show_alert=True)
+
+    # История изменений заявки
+    elif data.startswith('appt_history_'):
+        try:
+            appointment_id = int(data.split('_')[-1])
+            history = await get_appointment_history(appointment_id)
+            appointment = await get_appointment_by_id(appointment_id)
+
+            if not appointment:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+                return
+
+            msg = f"📜 **История заявки #{appointment_id}**\n\n"
+            msg += f"👤 {appointment['client_name']}\n"
+            msg += f"📝 {appointment['service_type']}\n\n"
+
+            if history:
+                msg += "**Изменения статуса:**\n"
+                for entry in history:
+                    msg += format_history_entry(entry) + "\n"
+            else:
+                msg += "_История изменений пуста_"
+
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = [[InlineKeyboardButton('🔙 Назад к заявке', callback_data=f'appt_detail_{appointment_id}')]]
+
+            await query.edit_message_text(
+                msg,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+
+    # Экспорт данных
+    elif data == 'export_appointments_all':
+        await query.answer("⏳ Формирую файл...")
+        try:
+            file_data, filename = await export_appointments_csv()
+            await query.message.reply_document(
+                document=InputFile(file_data, filename=filename),
+                caption="📥 Все заявки"
+            )
+            await query.edit_message_text("✅ Файл экспортирован", reply_markup=None)
+        except Exception as e:
+            logger.error(f"Ошибка экспорта: {e}")
+            await query.edit_message_text(f"❌ Ошибка экспорта: {e}", reply_markup=None)
+
+    elif data == 'export_appointments_pending':
+        await query.answer("⏳ Формирую файл...")
+        try:
+            file_data, filename = await export_appointments_csv(status='pending')
+            await query.message.reply_document(
+                document=InputFile(file_data, filename=filename),
+                caption="📥 Ожидающие заявки"
+            )
+            await query.edit_message_text("✅ Файл экспортирован", reply_markup=None)
+        except Exception as e:
+            logger.error(f"Ошибка экспорта: {e}")
+            await query.edit_message_text(f"❌ Ошибка экспорта: {e}", reply_markup=None)
+
+    elif data == 'export_appointments_confirmed':
+        await query.answer("⏳ Формирую файл...")
+        try:
+            file_data, filename = await export_appointments_csv(status='confirmed')
+            await query.message.reply_document(
+                document=InputFile(file_data, filename=filename),
+                caption="📥 Подтверждённые заявки"
+            )
+            await query.edit_message_text("✅ Файл экспортирован", reply_markup=None)
+        except Exception as e:
+            logger.error(f"Ошибка экспорта: {e}")
+            await query.edit_message_text(f"❌ Ошибка экспорта: {e}", reply_markup=None)
+
+    elif data == 'export_questions':
+        await query.answer("⏳ Формирую файл...")
+        try:
+            file_data, filename = await export_questions_csv()
+            await query.message.reply_document(
+                document=InputFile(file_data, filename=filename),
+                caption="📥 Все вопросы"
+            )
+            await query.edit_message_text("✅ Файл экспортирован", reply_markup=None)
+        except Exception as e:
+            logger.error(f"Ошибка экспорта: {e}")
+            await query.edit_message_text(f"❌ Ошибка экспорта: {e}", reply_markup=None)

@@ -7,6 +7,7 @@ from .admin import admin_handler, admin_commands_handler, admin_callback_handler
 from .admin_reply import admin_reply_handler
 from .contacts import contacts_handler, about_handler
 from .unified_message_handler import unified_message_handler
+from .help import help_handler, menu_handler
 
 __all__ = [
     'start_handler',
@@ -33,4 +34,6 @@ __all__ = [
     'contacts_handler',
     'about_handler',
     'unified_message_handler',
+    'help_handler',
+    'menu_handler',
 ]

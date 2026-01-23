@@ -91,13 +91,31 @@ async def get_appointment_by_id(appointment_id: int) -> Optional[Dict]:
             row = await cursor.fetchone()
             return dict(row) if row else None
 
-async def update_appointment_status(appointment_id: int, status: str):
-    """Обновить статус записи"""
+async def update_appointment_status(appointment_id: int, status: str, changed_by: int = None, comment: str = None):
+    """Обновить статус записи с записью в историю"""
     async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        # Получаем текущий статус
+        async with db.execute(
+            "SELECT status FROM appointments WHERE id = ?",
+            (appointment_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            old_status = row[0] if row else None
+
+        # Обновляем статус
         await db.execute(
             "UPDATE appointments SET status = ? WHERE id = ?",
             (status, appointment_id)
         )
+
+        # Записываем в историю
+        await db.execute(
+            """INSERT INTO appointment_status_history
+               (appointment_id, old_status, new_status, changed_by, comment)
+               VALUES (?, ?, ?, ?, ?)""",
+            (appointment_id, old_status, status, changed_by, comment)
+        )
+
         await db.commit()
 
 async def get_pending_appointments() -> List[Dict]:
@@ -178,3 +196,126 @@ async def add_admin(telegram_id: int):
             (telegram_id,)
         )
         await db.commit()
+
+
+# История статусов
+async def get_appointment_history(appointment_id: int) -> List[Dict]:
+    """Получить историю изменений статуса заявки"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT * FROM appointment_status_history
+               WHERE appointment_id = ?
+               ORDER BY created_at DESC""",
+            (appointment_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+# Работа с напоминаниями
+async def create_reminder(appointment_id: int, reminder_type: str, scheduled_at: datetime) -> int:
+    """Создать напоминание"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        cursor = await db.execute(
+            """INSERT INTO reminders (appointment_id, reminder_type, scheduled_at)
+               VALUES (?, ?, ?)""",
+            (appointment_id, reminder_type, scheduled_at.isoformat())
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_pending_reminders() -> List[Dict]:
+    """Получить напоминания, которые нужно отправить"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT r.*, a.user_id, a.client_name, a.service_type,
+                      a.appointment_date, a.appointment_time, a.status as appointment_status
+               FROM reminders r
+               JOIN appointments a ON r.appointment_id = a.id
+               WHERE r.status = 'pending'
+               AND r.scheduled_at <= datetime('now')
+               AND a.status NOT IN ('cancelled', 'completed')
+               ORDER BY r.scheduled_at""",
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def mark_reminder_sent(reminder_id: int, status: str = 'sent'):
+    """Отметить напоминание как отправленное"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        await db.execute(
+            """UPDATE reminders
+               SET status = ?, sent_at = datetime('now')
+               WHERE id = ?""",
+            (status, reminder_id)
+        )
+        await db.commit()
+
+
+# Экспорт данных
+async def get_all_appointments(
+    status: str = None,
+    date_from: date = None,
+    date_to: date = None
+) -> List[Dict]:
+    """Получить все заявки с фильтрацией для экспорта"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+
+        query = "SELECT * FROM appointments WHERE 1=1"
+        params = []
+
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if date_from:
+            query += " AND (appointment_date >= ? OR appointment_date IS NULL)"
+            params.append(date_from.isoformat())
+        if date_to:
+            query += " AND (appointment_date <= ? OR appointment_date IS NULL)"
+            params.append(date_to.isoformat())
+
+        query += " ORDER BY created_at DESC"
+
+        async with db.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_all_questions(status: str = None) -> List[Dict]:
+    """Получить все вопросы с фильтрацией для экспорта"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+
+        query = "SELECT * FROM questions WHERE 1=1"
+        params = []
+
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+
+        query += " ORDER BY created_at DESC"
+
+        async with db.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_appointments_for_reminder(target_date: date) -> List[Dict]:
+    """Получить заявки на определённую дату для создания напоминаний"""
+    async with aiosqlite.connect(DATABASE_URL.replace('sqlite:///', '')) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT a.* FROM appointments a
+               LEFT JOIN reminders r ON a.id = r.appointment_id AND r.reminder_type = 'day_before'
+               WHERE a.appointment_date = ?
+               AND a.status IN ('pending', 'confirmed')
+               AND r.id IS NULL""",
+            (target_date.isoformat(),)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]

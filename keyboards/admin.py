@@ -6,6 +6,7 @@ def admin_keyboard():
         [KeyboardButton('📋 Новые заявки')],
         [KeyboardButton('📅 Календарь записей')],
         [KeyboardButton('📊 Статистика')],
+        [KeyboardButton('📥 Экспорт данных')],
         [KeyboardButton('🏠 Главное меню')]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -80,8 +81,23 @@ def appointment_actions_keyboard(appointment_id: int):
             InlineKeyboardButton('❌ Отменить', callback_data=f'appt_cancel_{appointment_id}')
         ],
         [InlineKeyboardButton('💳 Отправить в оплату', callback_data=f'appt_payment_{appointment_id}')],
-        [InlineKeyboardButton('📞 Позвонить', callback_data=f'appt_call_{appointment_id}')],
+        [
+            InlineKeyboardButton('📞 Позвонить', callback_data=f'appt_call_{appointment_id}'),
+            InlineKeyboardButton('📜 История', callback_data=f'appt_history_{appointment_id}')
+        ],
         [InlineKeyboardButton('🔙 Назад', callback_data='appt_list')]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def export_keyboard():
+    """Клавиатура выбора типа экспорта"""
+    keyboard = [
+        [InlineKeyboardButton('📞 Экспорт заявок (все)', callback_data='export_appointments_all')],
+        [InlineKeyboardButton('📞 Только ожидающие', callback_data='export_appointments_pending')],
+        [InlineKeyboardButton('📞 Только подтверждённые', callback_data='export_appointments_confirmed')],
+        [InlineKeyboardButton('❓ Экспорт вопросов', callback_data='export_questions')],
+        [InlineKeyboardButton('🔙 Назад', callback_data='admin_back')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
