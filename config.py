@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Отладка: показываем какие переменные окружения видит приложение
+print("=== DEBUG: Проверка переменных окружения ===")
+print(f"BOT_TOKEN присутствует: {'BOT_TOKEN' in os.environ}")
+print(f"Все переменные с 'BOT': {[k for k in os.environ.keys() if 'BOT' in k.upper()]}")
+print(f"Все переменные с 'TOKEN': {[k for k in os.environ.keys() if 'TOKEN' in k.upper()]}")
+print("=" * 50)
+
 # Токен бота
 BOT_TOKEN = os.getenv('BOT_TOKEN', '')
 
