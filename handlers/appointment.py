@@ -6,7 +6,11 @@ from keyboards.main_menu import main_menu_keyboard, back_to_main_keyboard
 from keyboards.admin import appointment_actions_keyboard
 from config import WORK_START_HOUR, WORK_END_HOUR, WORK_DAYS, ADMIN_IDS
 from database import is_admin
+from utils.validators import validate_phone
 import calendar
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Состояния для записи
 APPOINTMENT_STATES = {
@@ -144,14 +148,23 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     
     elif state == APPOINTMENT_STATES['waiting_phone']:
-        user_data['appointment']['client_phone'] = text
+        # Валидация телефона
+        is_valid, result = validate_phone(text)
+        if not is_valid:
+            await update.message.reply_text(
+                f"❌ {result}\n\n📞 Введите номер телефона (например: +7 912 345-67-89):",
+                reply_markup=back_to_main_keyboard()
+            )
+            return
+
+        user_data['appointment']['client_phone'] = result  # Сохраняем отформатированный номер
         user_data['appointment_state'] = APPOINTMENT_STATES['waiting_date']
-        
+
         # Показываем календарь
         today = date.today()
         cal = generate_calendar(today.year, today.month)
         cal_text = "\n".join([" ".join(row) for row in cal])
-        
+
         await update.message.reply_text(
             f"📅 Выберите дату:\n\n{cal_text}\n\nВведите число (например: 15):",
             reply_markup=back_to_main_keyboard()
@@ -294,7 +307,25 @@ async def appointment_callback_handler(update: Update, context: ContextTypes.DEF
         await query.edit_message_text(
             f"✅ Запись подтверждена\n\n{appointment['client_name']} - {appointment['appointment_date']} {appointment['appointment_time']}"
         )
-    
+
+        # Уведомляем клиента о подтверждении
+        try:
+            await context.bot.send_message(
+                chat_id=appointment['user_id'],
+                text=f"""✅ Ваша запись подтверждена!
+
+📝 Услуга: {appointment['service_type']}
+📅 Дата: {appointment['appointment_date']}
+⏰ Время: {appointment['appointment_time']}
+
+📍 Адрес: Санкт-Петербург, Удельный пр., д. 5, оф. 406 (2 этаж)
+📞 Телефон: 8 (812) 985-95-74
+
+Ждём вас!"""
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления клиенту: {e}")
+
     elif data.startswith('appt_cancel_'):
         appointment_id = int(data.split('_')[-1])
         await update_appointment_status(appointment_id, 'cancelled')
@@ -302,8 +333,78 @@ async def appointment_callback_handler(update: Update, context: ContextTypes.DEF
         await query.edit_message_text(
             f"❌ Запись отменена\n\n{appointment['client_name']} - {appointment['appointment_date']} {appointment['appointment_time']}"
         )
+
+        # Уведомляем клиента об отмене
+        try:
+            await context.bot.send_message(
+                chat_id=appointment['user_id'],
+                text=f"""❌ Ваша запись отменена
+
+📝 Услуга: {appointment['service_type']}
+📅 Дата: {appointment['appointment_date']}
+⏰ Время: {appointment['appointment_time']}
+
+Если у вас есть вопросы, свяжитесь с нами:
+📞 8 (812) 985-95-74"""
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления клиенту: {e}")
     
     elif data.startswith('appt_call_'):
         appointment_id = int(data.split('_')[-1])
         appointment = await get_appointment_by_id(appointment_id)
         await query.answer(f"Телефон: {appointment['client_phone']}", show_alert=True)
+
+
+async def my_appointments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать записи пользователя"""
+    user_id = update.effective_user.id
+    appointments = await get_user_appointments(user_id)
+
+    if not appointments:
+        await update.message.reply_text(
+            "📝 У вас пока нет записей.\n\nВы можете записаться на консультацию через главное меню.",
+            reply_markup=main_menu_keyboard()
+        )
+        return
+
+    # Статусы на русском
+    status_map = {
+        'pending': '⏳ Ожидает подтверждения',
+        'confirmed': '✅ Подтверждена',
+        'cancelled': '❌ Отменена',
+        'completed': '✔️ Завершена'
+    }
+
+    text = "📝 **Ваши записи:**\n\n"
+
+    for apt in appointments:
+        status = status_map.get(apt['status'], apt['status'])
+        apt_date = apt['appointment_date']
+        apt_time = apt['appointment_time']
+
+        # Форматирование даты/времени
+        if isinstance(apt_date, str):
+            date_str = apt_date
+        else:
+            date_str = apt_date.strftime('%d.%m.%Y')
+
+        if apt_time:
+            if isinstance(apt_time, str):
+                time_str = apt_time[:5]  # HH:MM
+            else:
+                time_str = apt_time.strftime('%H:%M')
+        else:
+            time_str = 'уточняется'
+
+        text += f"📌 **{apt['service_type']}**\n"
+        text += f"   📅 {date_str} в {time_str}\n"
+        text += f"   {status}\n\n"
+
+    text += "📍 Адрес: Санкт-Петербург, Удельный пр., д. 5, оф. 406 (2 этаж)"
+
+    await update.message.reply_text(
+        text,
+        parse_mode='Markdown',
+        reply_markup=main_menu_keyboard()
+    )

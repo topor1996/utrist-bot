@@ -5,6 +5,7 @@ def main_menu_keyboard():
     keyboard = [
         [KeyboardButton('📋 Наши услуги')],
         [KeyboardButton('📞 Записаться на консультацию')],
+        [KeyboardButton('📝 Мои записи')],
         [KeyboardButton('❓ Задать вопрос')],
         [KeyboardButton('ℹ️ О компании'), KeyboardButton('📍 Контакты')],
     ]

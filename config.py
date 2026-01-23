@@ -1,10 +1,24 @@
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Токен бота
 BOT_TOKEN = os.getenv('BOT_TOKEN', '')
+
+if not BOT_TOKEN:
+    print("=" * 60)
+    print("ОШИБКА: Не задан BOT_TOKEN!")
+    print("")
+    print("Для Railway/Docker:")
+    print("  Установите переменную окружения BOT_TOKEN в настройках")
+    print("")
+    print("Для локального запуска:")
+    print("  1. Скопируйте .env.example в .env")
+    print("  2. Замените 'your_bot_token_here' на токен от @BotFather")
+    print("=" * 60)
+    sys.exit(1)
 
 # База данных
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot_database.db')
