@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from keyboards.main_menu import main_menu_keyboard, contact_keyboard
-from config import COMPANY_PHONE, COMPANY_WEBSITE
+from config import COMPANY_PHONE, COMPANY_WEBSITE, COMPANY_ADDRESS
 
 async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик контактов"""
@@ -11,14 +11,11 @@ async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📞 Телефон: {COMPANY_PHONE}
 🌐 Сайт: {COMPANY_WEBSITE}
 
-📍 Адрес: Санкт-Петербург
-(уточните адрес на сайте)
+📍 Адрес: {COMPANY_ADDRESS}
 
 ⏰ Часы работы:
-Пн-Пт: 9:00 - 18:00
+Пн-Пт: 10:00 - 18:00
 Сб-Вс: Выходной
-
-🚗 Есть парковка
 """
     await update.message.reply_text(
         text,
