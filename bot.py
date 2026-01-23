@@ -216,9 +216,30 @@ def main():
     # Callback для админ-панели (admin_, appt_, q_, export_)
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(admin_|appt_|q_|export_)"))
     
-    # Задержка перед запуском для завершения старых контейнеров
-    startup_delay = 15
-    logger.info(f"Ожидание {startup_delay} секунд перед запуском polling (для завершения старых инстансов)...")
+    # Принудительный сброс сессии и удаление webhook перед запуском
+    import httpx
+    logger.info("Сброс сессии Telegram API...")
+    try:
+        with httpx.Client() as client:
+            # Удаляем webhook и сбрасываем pending updates
+            resp = client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook",
+                params={"drop_pending_updates": True}
+            )
+            logger.info(f"deleteWebhook: {resp.json()}")
+
+            # Вызываем getUpdates с offset=-1 чтобы "занять" сессию
+            resp = client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
+                params={"offset": -1, "timeout": 1}
+            )
+            logger.info(f"getUpdates reset: {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"Ошибка сброса сессии: {e}")
+
+    # Ждём чтобы Telegram API освободил старую сессию
+    startup_delay = 5
+    logger.info(f"Ожидание {startup_delay} секунд...")
     time.sleep(startup_delay)
 
     # Запуск бота с обработкой сигналов для graceful shutdown
