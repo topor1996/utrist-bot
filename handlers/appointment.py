@@ -373,21 +373,25 @@ async def my_appointments_handler(update: Update, context: ContextTypes.DEFAULT_
         'pending': '⏳ Ожидает подтверждения',
         'confirmed': '✅ Подтверждена',
         'cancelled': '❌ Отменена',
-        'completed': '✔️ Завершена'
+        'completed': '✔️ Завершена',
+        'payment_sent': '💳 Ожидает оплаты'
     }
 
     text = "📝 **Ваши записи:**\n\n"
 
     for apt in appointments:
         status = status_map.get(apt['status'], apt['status'])
-        apt_date = apt['appointment_date']
-        apt_time = apt['appointment_time']
+        apt_date = apt.get('appointment_date')
+        apt_time = apt.get('appointment_time')
 
-        # Форматирование даты/времени
-        if isinstance(apt_date, str):
-            date_str = apt_date
+        # Форматирование даты/времени (могут быть None для упрощённых заявок)
+        if apt_date:
+            if isinstance(apt_date, str):
+                date_str = apt_date
+            else:
+                date_str = apt_date.strftime('%d.%m.%Y')
         else:
-            date_str = apt_date.strftime('%d.%m.%Y')
+            date_str = 'не указана'
 
         if apt_time:
             if isinstance(apt_time, str):
@@ -398,7 +402,10 @@ async def my_appointments_handler(update: Update, context: ContextTypes.DEFAULT_
             time_str = 'уточняется'
 
         text += f"📌 **{apt['service_type']}**\n"
-        text += f"   📅 {date_str} в {time_str}\n"
+        if date_str != 'не указана':
+            text += f"   📅 {date_str} в {time_str}\n"
+        else:
+            text += f"   📅 Дата и время уточняются\n"
         text += f"   {status}\n\n"
 
     text += "📍 Адрес: Санкт-Петербург, Удельный пр., д. 5, оф. 406 (2 этаж)"

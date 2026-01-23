@@ -12,6 +12,7 @@ from keyboards.admin import (
 )
 from keyboards.main_menu import main_menu_keyboard
 from utils.export import export_appointments_csv, export_questions_csv, format_history_entry
+from utils.notifications import notify_client_status_change
 from datetime import date, timedelta
 import logging
 
@@ -273,26 +274,36 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         await update_appointment_status(appointment_id, 'confirmed', changed_by=user_id)
         appointment = await get_appointment_by_id(appointment_id)
-        
+
         if not appointment:
             await query.answer("❌ Заявка не найдена", show_alert=True)
             return
-        
+
+        # Отправляем уведомление клиенту
+        await notify_client_status_change(
+            context.bot,
+            appointment['user_id'],
+            appointment,
+            'confirmed'
+        )
+
         # Формируем сообщение с правильной информацией
         msg = f"✅ **Запись подтверждена**\n\n"
         msg += f"👤 **ФИО:** {appointment['client_name']}\n"
         msg += f"📝 **Услуга:** {appointment['service_type']}\n"
         msg += f"📞 **Телефон:** {appointment['client_phone']}\n"
-        
+
         if appointment.get('client_email'):
             msg += f"📧 **Email:** {appointment['client_email']}\n"
-        
+
         if appointment.get('appointment_date') and appointment.get('appointment_time'):
             msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
             msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
         else:
             msg += f"📅 **Дата/время:** не указаны (заявка без конкретного времени)\n"
-        
+
+        msg += "\n📨 _Клиент уведомлён_"
+
         try:
             await query.edit_message_text(
                 msg,
@@ -301,7 +312,7 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения о подтверждении: {e}")
             await query.edit_message_text(
-                msg.replace('*', '')
+                msg.replace('*', '').replace('_', '')
             )
     
     elif data.startswith('appt_cancel_'):
@@ -315,24 +326,34 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         await update_appointment_status(appointment_id, 'cancelled', changed_by=user_id)
         appointment = await get_appointment_by_id(appointment_id)
-        
+
         if not appointment:
             await query.answer("❌ Заявка не найдена", show_alert=True)
             return
-        
+
+        # Отправляем уведомление клиенту
+        await notify_client_status_change(
+            context.bot,
+            appointment['user_id'],
+            appointment,
+            'cancelled'
+        )
+
         # Формируем сообщение с правильной информацией
         msg = f"❌ **Запись отменена**\n\n"
         msg += f"👤 **ФИО:** {appointment['client_name']}\n"
         msg += f"📝 **Услуга:** {appointment['service_type']}\n"
         msg += f"📞 **Телефон:** {appointment['client_phone']}\n"
-        
+
         if appointment.get('client_email'):
             msg += f"📧 **Email:** {appointment['client_email']}\n"
-        
+
         if appointment.get('appointment_date') and appointment.get('appointment_time'):
             msg += f"📅 **Дата:** {appointment['appointment_date']}\n"
             msg += f"⏰ **Время:** {appointment['appointment_time']}\n"
-        
+
+        msg += "\n📨 _Клиент уведомлён_"
+
         try:
             await query.edit_message_text(
                 msg,
@@ -742,9 +763,18 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Обновляем отображение
         appointment = await get_appointment_by_id(appointment_id)
         if appointment:
+            # Отправляем уведомление клиенту
+            await notify_client_status_change(
+                context.bot,
+                appointment['user_id'],
+                appointment,
+                'confirmed'
+            )
+
             msg = f"✅ **Заявка #{appointment_id} подтверждена**\n\n"
             msg += f"👤 {appointment['client_name']}\n"
-            msg += f"📝 {appointment['service_type']}"
+            msg += f"📝 {appointment['service_type']}\n"
+            msg += "\n📨 _Клиент уведомлён_"
             await query.edit_message_text(
                 msg,
                 parse_mode='Markdown',
@@ -764,9 +794,18 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         appointment = await get_appointment_by_id(appointment_id)
         if appointment:
+            # Отправляем уведомление клиенту
+            await notify_client_status_change(
+                context.bot,
+                appointment['user_id'],
+                appointment,
+                'cancelled'
+            )
+
             msg = f"❌ **Заявка #{appointment_id} отменена**\n\n"
             msg += f"👤 {appointment['client_name']}\n"
-            msg += f"📝 {appointment['service_type']}"
+            msg += f"📝 {appointment['service_type']}\n"
+            msg += "\n📨 _Клиент уведомлён_"
             await query.edit_message_text(
                 msg,
                 parse_mode='Markdown',
@@ -786,9 +825,18 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         appointment = await get_appointment_by_id(appointment_id)
         if appointment:
+            # Отправляем уведомление клиенту
+            await notify_client_status_change(
+                context.bot,
+                appointment['user_id'],
+                appointment,
+                'completed'
+            )
+
             msg = f"✔️ **Заявка #{appointment_id} завершена**\n\n"
             msg += f"👤 {appointment['client_name']}\n"
-            msg += f"📝 {appointment['service_type']}"
+            msg += f"📝 {appointment['service_type']}\n"
+            msg += "\n📨 _Клиент уведомлён_"
             await query.edit_message_text(
                 msg,
                 parse_mode='Markdown',
