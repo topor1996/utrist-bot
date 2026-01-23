@@ -219,8 +219,10 @@ def main():
     # Принудительный сброс сессии и удаление webhook перед запуском
     import httpx
     logger.info("Сброс сессии Telegram API...")
-    try:
-        with httpx.Client() as client:
+
+    def reset_telegram_session():
+        """Сбрасывает сессию Telegram API"""
+        with httpx.Client(timeout=30.0) as client:
             # Удаляем webhook и сбрасываем pending updates
             resp = client.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook",
@@ -228,19 +230,38 @@ def main():
             )
             logger.info(f"deleteWebhook: {resp.json()}")
 
-            # Вызываем getUpdates с offset=-1 чтобы "занять" сессию
-            resp = client.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
-                params={"offset": -1, "timeout": 1}
-            )
-            logger.info(f"getUpdates reset: {resp.status_code}")
+            # Делаем несколько коротких getUpdates чтобы "перехватить" сессию
+            for i in range(3):
+                try:
+                    resp = client.post(
+                        f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
+                        params={"offset": -1, "timeout": 1}
+                    )
+                    data = resp.json()
+                    if data.get('ok'):
+                        logger.info(f"getUpdates #{i+1}: OK")
+                    else:
+                        logger.warning(f"getUpdates #{i+1}: {data}")
+                except Exception as e:
+                    logger.warning(f"getUpdates #{i+1} error: {e}")
+                time.sleep(1)
+
+    try:
+        reset_telegram_session()
     except Exception as e:
         logger.warning(f"Ошибка сброса сессии: {e}")
 
     # Ждём чтобы Telegram API освободил старую сессию
-    startup_delay = 5
-    logger.info(f"Ожидание {startup_delay} секунд...")
+    # 10 секунд обычно достаточно для завершения предыдущего polling
+    startup_delay = 10
+    logger.info(f"Ожидание {startup_delay} секунд перед запуском polling...")
     time.sleep(startup_delay)
+
+    # Повторный сброс перед запуском
+    try:
+        reset_telegram_session()
+    except Exception as e:
+        logger.warning(f"Ошибка повторного сброса сессии: {e}")
 
     # Запуск бота с обработкой сигналов для graceful shutdown
     logger.info("Бот запущен")
