@@ -203,10 +203,19 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             'pending': '⏳',
             'confirmed': '✅',
             'cancelled': '❌',
-            'completed': '✔️'
+            'completed': '✔️',
+            'payment_sent': '💳'
         }.get(appointment['status'], '❓')
+
+        status_text = {
+            'pending': 'Ожидает',
+            'confirmed': 'Подтверждена',
+            'cancelled': 'Отменена',
+            'completed': 'Завершена',
+            'payment_sent': 'Отправлена в оплату'
+        }.get(appointment['status'], appointment['status'])
         
-        msg += f"\n{status_emoji} **Статус:** {appointment['status']}"
+        msg += f"\n{status_emoji} **Статус:** {status_text}"
         
         # Дата создания
         created_at = appointment.get('created_at', 'неизвестно')
@@ -401,20 +410,51 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             f"❌ Вопрос закрыт\n\n{question['question_text'][:50]}..."
         )
     
+    elif data.startswith('appt_payment_'):
+        # Начинаем процесс отправки в оплату
+        try:
+            appointment_id = int(data.split('_')[-1])
+            appointment = await get_appointment_by_id(appointment_id)
+
+            if not appointment:
+                await query.answer("❌ Заявка не найдена", show_alert=True)
+                return
+
+            # Сохраняем данные для оплаты в контексте
+            context.user_data['payment_appointment_id'] = appointment_id
+            context.user_data['payment_user_id'] = appointment['user_id']
+            context.user_data['payment_state'] = 'waiting_amount'
+            context.user_data['payment_service'] = appointment['service_type']
+            context.user_data['payment_client_name'] = appointment['client_name']
+
+            await query.edit_message_text(
+                f"💳 **Отправка в оплату**\n\n"
+                f"📋 Заявка #{appointment_id}\n"
+                f"👤 Клиент: {appointment['client_name']}\n"
+                f"📝 Услуга: {appointment['service_type']}\n\n"
+                f"Введите сумму к оплате (только число, например: 7000):\n\n"
+                f"Для отмены нажмите /admin",
+                parse_mode='Markdown'
+            )
+            await query.answer("Введите сумму к оплате")
+        except (ValueError, IndexError) as e:
+            logger.error(f"Ошибка парсинга ID заявки из '{data}': {e}")
+            await query.answer("❌ Ошибка: неверный ID заявки", show_alert=True)
+
     elif data.startswith('q_reply_'):
         # Начинаем процесс ответа на вопрос
         try:
             question_id = int(data.split('_')[-1])
             question = await get_question_by_id(question_id)
-            
+
             if not question:
                 await query.answer("❌ Вопрос не найден", show_alert=True)
                 return
-            
+
             # Сохраняем ID вопроса в контексте администратора
             context.user_data['replying_to_question'] = question_id
             context.user_data['replying_to_user'] = question['user_id']
-            
+
             await query.edit_message_text(
                 f"💬 **Ответ на вопрос #{question_id}**\n\n"
                 f"Вопрос: {question['question_text']}\n\n"

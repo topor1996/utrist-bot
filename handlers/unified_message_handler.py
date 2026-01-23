@@ -1,14 +1,14 @@
 """
 Универсальный обработчик сообщений
 Объединяет логику process_simple_appointment и service_detail_handler
-Также обрабатывает ответы администратора на вопросы
+Также обрабатывает ответы администратора на вопросы и процесс оплаты
 """
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
 from .simple_appointment import process_simple_appointment, SIMPLE_APPOINTMENT_STATES
 from .services import service_detail_handler
-from .admin_reply import admin_reply_handler
+from .admin_reply import admin_reply_handler, admin_payment_handler
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,14 @@ async def unified_message_handler(update: Update, context: ContextTypes.DEFAULT_
     user_data = context.user_data
     state = user_data.get('simple_appointment_state', 0)
     question_state = user_data.get('question_state', 0)
-    
+
     logger.info(f"unified_message_handler вызван: state={state}, question_state={question_state}, text='{update.message.text[:50]}'")
-    
+
+    # Проверяем, идет ли процесс оплаты (администратор вводит сумму/ссылку)
+    if 'payment_state' in user_data:
+        logger.info(f"unified_message_handler: обнаружен процесс оплаты, передаем в admin_payment_handler")
+        return await admin_payment_handler(update, context)
+
     # Сначала проверяем, идет ли процесс ответа администратора на вопрос
     if 'replying_to_question' in user_data:
         logger.info(f"unified_message_handler: обнаружен процесс ответа администратора, передаем в admin_reply_handler")

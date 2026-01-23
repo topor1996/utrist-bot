@@ -79,6 +79,7 @@ def appointment_actions_keyboard(appointment_id: int):
             InlineKeyboardButton('✅ Подтвердить', callback_data=f'appt_confirm_{appointment_id}'),
             InlineKeyboardButton('❌ Отменить', callback_data=f'appt_cancel_{appointment_id}')
         ],
+        [InlineKeyboardButton('💳 Отправить в оплату', callback_data=f'appt_payment_{appointment_id}')],
         [InlineKeyboardButton('📞 Позвонить', callback_data=f'appt_call_{appointment_id}')],
         [InlineKeyboardButton('🔙 Назад', callback_data='appt_list')]
     ]
