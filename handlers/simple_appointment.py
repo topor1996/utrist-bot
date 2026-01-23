@@ -291,31 +291,32 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Редактируем сообщение с благодарностью (вместо двух сообщений)
     try:
         await query.edit_message_text(
-            "✅ Заявка отправлена!",
-            reply_markup=None
-        )
-        logger.info("Сообщение 'Заявка отправлена' отредактировано")
-    except Exception as e:
-        logger.error(f"Ошибка редактирования сообщения: {e}")
-    
-    try:
-        await query.message.reply_text(
             thank_you_text,
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
         logger.info("Сообщение 'Спасибо' отправлено клиенту")
     except Exception as e:
-        logger.error(f"Ошибка отправки сообщения клиенту: {e}")
-        # Пытаемся отправить хотя бы простое сообщение
+        logger.error(f"Ошибка редактирования сообщения: {e}")
+        # Пробуем отправить как новое сообщение
         try:
             await query.message.reply_text(
-                "✅ Спасибо за вашу заявку! Наш специалист свяжется с вами в ближайшее время."
+                thank_you_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
         except Exception as e2:
-            logger.error(f"Критическая ошибка: не удалось отправить fallback сообщение: {e2}")
+            logger.error(f"Ошибка отправки сообщения клиенту: {e2}")
+            # Пытаемся отправить хотя бы простое сообщение
+            try:
+                await query.message.reply_text(
+                    "✅ Спасибо за вашу заявку! Наш специалист свяжется с вами в ближайшее время."
+                )
+            except Exception as e3:
+                logger.error(f"Критическая ошибка: не удалось отправить fallback сообщение: {e3}")
     
     user_data.clear()
     logger.info("Заявка успешно обработана, user_data очищен")
@@ -324,16 +325,19 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
     """Обработчик отмены заявки"""
     query = update.callback_query
     await query.answer()
-    
+
     context.user_data.clear()
-    
+
+    from keyboards.services import services_keyboard
+
+    # Редактируем сообщение с информацией об отмене
     await query.edit_message_text(
-        "❌ Заявка отменена.",
+        "❌ Заявка отменена.\n\nВыберите категорию услуг в меню ниже.",
         reply_markup=None
     )
-    
-    from keyboards.services import services_keyboard
+
+    # Показываем клавиатуру с категориями
     await query.message.reply_text(
-        "Выберите категорию услуг:",
+        "Выберите категорию:",
         reply_markup=services_keyboard()
     )

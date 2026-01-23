@@ -166,21 +166,15 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # Получаем тип услуги из контекста
         service_type = context.user_data.get('selected_service', 'Консультация')
         logger.info(f"Начинаем процесс записи для услуги: {service_type}")
-        
+
         # Запускаем упрощенный процесс записи
-        from .simple_appointment import start_simple_appointment, SIMPLE_APPOINTMENT_STATES
-        
-        await query.edit_message_text(
-            f"📝 Заявка на услугу: {service_type}\n\nНачинаем оформление заявки...",
-            reply_markup=None
-        )
-        
-        # Устанавливаем состояние и запускаем процесс
+        from .simple_appointment import SIMPLE_APPOINTMENT_STATES
+
+        # Устанавливаем состояние
         context.user_data['simple_appointment'] = {'service_type': service_type}
         context.user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_name']
-        
-        text = f"""
-📝 Заявка на услугу: {service_type}
+
+        text = f"""📝 **Заявка на услугу:** {service_type}
 
 Для оформления заявки нам нужна следующая информация:
 
@@ -188,22 +182,24 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
 📞 **Номер телефона**
 📧 **Email адрес**
 
-Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:
-"""
-        
+Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:"""
+
         logger.info(f"Отправляем запрос на ввод ФИО для услуги: {service_type}")
-        await query.message.reply_text(
+
+        # Редактируем текущее сообщение вместо отправки нового
+        await query.edit_message_text(
             text,
-            parse_mode='Markdown',
-            reply_markup=cancel_keyboard()
+            parse_mode='Markdown'
         )
         logger.info(f"Запрос на ввод ФИО отправлен. user_data = {context.user_data}")
         
     elif query.data == 'back_to_services':
+        # Просто редактируем сообщение, убирая кнопки
         await query.edit_message_text(
-            "📋 Наши услуги\n\nВыберите категорию:",
+            "📋 Наши услуги — выберите категорию в меню ниже",
             reply_markup=None
         )
+        # Показываем клавиатуру с категориями
         await query.message.reply_text(
             "Выберите категорию:",
             reply_markup=services_keyboard()
