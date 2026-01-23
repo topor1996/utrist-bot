@@ -262,8 +262,8 @@ ID: {appointment_id}
                     text=appointment_info,
                     reply_markup=appointment_actions_keyboard(appointment_id)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
         
         await update.message.reply_text(
             f"""

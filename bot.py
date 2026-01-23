@@ -8,6 +8,7 @@ import logging
 from telegram import Update
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
@@ -18,6 +19,7 @@ from telegram.ext import (
 
 from config import BOT_TOKEN
 from database import init_db
+from middleware import rate_limit_middleware
 from handlers import (
     start_handler,
     main_menu_handler,
@@ -65,7 +67,16 @@ def main():
         logger.info("База данных инициализирована")
     
     application.post_init = post_init
-    
+
+    # Rate limiting middleware - первый обработчик для защиты от спама
+    async def rate_limit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработчик для проверки rate limit"""
+        if await rate_limit_middleware(update, context):
+            # Если лимит превышен, прерываем обработку
+            raise ApplicationHandlerStop()
+
+    application.add_handler(MessageHandler(filters.ALL, rate_limit_handler), group=-1)
+
     # Обработчик команды /start
     application.add_handler(CommandHandler("start", start_handler))
     
@@ -138,13 +149,8 @@ def main():
     )
     application.add_handler(question_conv)
     
-    # Обработчик админ-панели
+    # Команда /admin для администраторов
     application.add_handler(CommandHandler("admin", admin_handler))
-    application.add_handler(MessageHandler(filters.Regex("^🔐 Админ-панель$"), admin_handler))
-    application.add_handler(MessageHandler(
-        filters.Regex("^(📋 Новые заявки|📅 Календарь записей|📊 Статистика)$"),
-        admin_commands_handler
-    ))
     
     # Универсальный обработчик сообщений
     # Объединяет логику process_simple_appointment и service_detail_handler

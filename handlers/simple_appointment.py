@@ -315,8 +315,8 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
             await query.message.reply_text(
                 "✅ Спасибо за вашу заявку! Наш специалист свяжется с вами в ближайшее время."
             )
-        except:
-            pass
+        except Exception as e2:
+            logger.error(f"Критическая ошибка: не удалось отправить fallback сообщение: {e2}")
     
     user_data.clear()
     logger.info("Заявка успешно обработана, user_data очищен")
