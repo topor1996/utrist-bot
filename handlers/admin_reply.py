@@ -45,7 +45,7 @@ async def admin_payment_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 await update.message.reply_text(
                     "❌ Сумма должна быть больше 0. Введите сумму ещё раз:"
                 )
-                return
+                return  # Ждём повторного ввода
 
             # Сохраняем сумму и переходим к запросу ссылки
             user_data['payment_amount'] = amount
@@ -57,11 +57,13 @@ async def admin_payment_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 f"(или введите 'skip' чтобы отправить без ссылки)\n\n"
                 f"Для отмены нажмите /admin"
             )
+            return  # Ждём ввода ссылки
 
         except ValueError:
             await update.message.reply_text(
                 "❌ Некорректная сумма. Введите число (например: 7000):"
             )
+            return  # Ждём повторного ввода
 
     elif payment_state == 'waiting_link':
         # Ожидаем ссылку на оплату
@@ -143,6 +145,7 @@ async def admin_payment_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
         # Очищаем состояние
         _clear_payment_state(user_data)
+        return
 
 
 def _clear_payment_state(user_data):

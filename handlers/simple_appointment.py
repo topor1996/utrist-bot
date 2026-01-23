@@ -112,14 +112,16 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             logger.error(f"Ошибка отправки запроса на телефон: {e}")
             import traceback
             logger.error(traceback.format_exc())
-    
+        return  # Явный return после обработки ФИО
+
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_phone']:
         is_valid, result = validate_phone_util(text)
         if not is_valid:
             await update.message.reply_text(
-                f"❌ {result}\n\nПожалуйста, введите корректный номер телефона:"
+                f"❌ {result}\n\nПожалуйста, введите корректный номер телефона:",
+                reply_markup=cancel_keyboard()
             )
-            return SIMPLE_APPOINTMENT_STATES['waiting_phone']
+            return  # Возвращаемся, ждем повторного ввода
 
         # result содержит отформатированный номер
         user_data['simple_appointment']['client_phone'] = result
@@ -136,15 +138,16 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             parse_mode='Markdown',
             reply_markup=cancel_keyboard()
         )
-        return SIMPLE_APPOINTMENT_STATES['waiting_email']
-    
+        return  # Переход к вводу email
+
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_email']:
         is_valid, result = validate_email_util(text)
         if not is_valid:
             await update.message.reply_text(
-                f"❌ {result}\n\nПожалуйста, введите корректный email адрес:"
+                f"❌ {result}\n\nПожалуйста, введите корректный email адрес:",
+                reply_markup=cancel_keyboard()
             )
-            return SIMPLE_APPOINTMENT_STATES['waiting_email']
+            return  # Возвращаемся, ждем повторного ввода
 
         # result содержит нормализованный email
         user_data['simple_appointment']['client_email'] = result
@@ -175,14 +178,17 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        
+
         logger.info("Сообщение с кнопками отправлено")
-    
+        return  # Явный return после обработки email
+
     elif state == SIMPLE_APPOINTMENT_STATES['waiting_confirm']:
         # Это не должно происходить, но на всякий случай
         await update.message.reply_text(
             "Пожалуйста, используйте кнопки для подтверждения заявки."
         )
+        return
+
 
 async def submit_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отправки заявки"""

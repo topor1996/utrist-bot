@@ -192,7 +192,8 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode='Markdown'
         )
         logger.info(f"Запрос на ввод ФИО отправлен. user_data = {context.user_data}")
-        
+        return
+
     elif query.data == 'back_to_services':
         # Просто редактируем сообщение, убирая кнопки
         await query.edit_message_text(
@@ -204,3 +205,4 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
             "Выберите категорию:",
             reply_markup=services_keyboard()
         )
+        return

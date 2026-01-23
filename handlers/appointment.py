@@ -138,7 +138,8 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
             "👤 Введите ваше имя:",
             reply_markup=back_to_main_keyboard()
         )
-    
+        return
+
     elif state == APPOINTMENT_STATES['waiting_name']:
         user_data['appointment']['client_name'] = text
         user_data['appointment_state'] = APPOINTMENT_STATES['waiting_phone']
@@ -146,7 +147,8 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📞 Введите ваш телефон:",
             reply_markup=back_to_main_keyboard()
         )
-    
+        return
+
     elif state == APPOINTMENT_STATES['waiting_phone']:
         # Валидация телефона
         is_valid, result = validate_phone(text)
@@ -169,7 +171,8 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📅 Выберите дату:\n\n{cal_text}\n\nВведите число (например: 15):",
             reply_markup=back_to_main_keyboard()
         )
-    
+        return
+
     elif state == APPOINTMENT_STATES['waiting_date']:
         try:
             day = int(text)
@@ -213,9 +216,11 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"⏰ Выберите время:\n\n{times_text}\n\nВведите время в формате ЧЧ:ММ (например: 14:30):",
                 reply_markup=back_to_main_keyboard()
             )
+            return
         except ValueError:
             await update.message.reply_text("❌ Введите корректное число:")
-    
+            return
+
     elif state == APPOINTMENT_STATES['waiting_time']:
         try:
             time_str = text.replace(':', '.')
@@ -237,9 +242,11 @@ async def process_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "💬 Введите комментарий (или отправьте 'пропустить'):",
                 reply_markup=back_to_main_keyboard()
             )
+            return
         except (ValueError, IndexError):
             await update.message.reply_text("❌ Введите время в формате ЧЧ:ММ (например: 14:30):")
-    
+            return
+
     elif state == APPOINTMENT_STATES['waiting_comment']:
         comment = None if text.lower() in ['пропустить', 'skip', ''] else text
         user_data['appointment']['comment'] = comment
