@@ -119,13 +119,19 @@ async def service_detail_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     logger.info(f"service_detail_handler: обрабатываем выбор услуги: {service_name}")
 
+    # Проверяем, является ли текст известной услугой
+    from data.prices import SERVICE_PRICES
+    if service_name not in SERVICE_PRICES:
+        logger.info(f"service_detail_handler: '{service_name}' не является известной услугой, пропускаем")
+        return
+
     # Сохраняем выбранную услугу в контексте
     context.user_data['selected_service'] = service_name
     logger.info(f"Услуга сохранена в контексте: {service_name}")
 
     # Получаем информацию об услуге из data/prices.py
     info_text = get_service_info(service_name)
-    
+
     logger.info(f"Информация об услуге: длина текста={len(info_text)}")
     
     # Кнопки для действий
@@ -163,6 +169,12 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
     logger.info(f"service_callback_handler вызван с data: {query.data}")
     
     if query.data == 'start_appointment':
+        # Защита от двойного нажатия: если уже в процессе записи, игнорируем
+        current_state = context.user_data.get('simple_appointment_state', 0)
+        if current_state != 0:
+            logger.info(f"service_callback_handler: уже в процессе записи (state={current_state}), игнорируем повторное нажатие")
+            return
+
         # Получаем тип услуги из контекста
         service_type = context.user_data.get('selected_service', 'Консультация')
         logger.info(f"Начинаем процесс записи для услуги: {service_type}")
@@ -170,27 +182,33 @@ async def service_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # Запускаем упрощенный процесс записи
         from .simple_appointment import SIMPLE_APPOINTMENT_STATES
 
-        # Устанавливаем состояние
-        context.user_data['simple_appointment'] = {'service_type': service_type}
-        context.user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_name']
-
-        text = f"""📝 **Заявка на услугу:** {service_type}
-
-Для оформления заявки нам нужна следующая информация:
-
-👤 **ФИО** (полное имя)
-📞 **Номер телефона**
-📧 **Email адрес**
-
-Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:"""
+        text = (
+            f"📝 Заявка на услугу: {service_type}\n\n"
+            "Для оформления заявки нам нужна следующая информация:\n\n"
+            "👤 ФИО (полное имя)\n"
+            "📞 Номер телефона\n"
+            "📧 Email адрес\n\n"
+            "Начнем с вашего имени. Пожалуйста, введите ваше полное ФИО:"
+        )
 
         logger.info(f"Отправляем запрос на ввод ФИО для услуги: {service_type}")
 
-        # Редактируем текущее сообщение вместо отправки нового
-        await query.edit_message_text(
-            text,
-            parse_mode='Markdown'
-        )
+        # Сначала редактируем сообщение, потом устанавливаем состояние
+        try:
+            await query.edit_message_text(text)
+        except Exception as e:
+            logger.error(f"Ошибка редактирования сообщения: {e}")
+            # Если не удалось отредактировать, отправляем новое
+            try:
+                await query.message.reply_text(text)
+            except Exception as e2:
+                logger.error(f"Ошибка отправки сообщения: {e2}")
+                return
+
+        # Устанавливаем состояние ПОСЛЕ успешной отправки сообщения
+        context.user_data['simple_appointment'] = {'service_type': service_type}
+        context.user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_name']
+
         logger.info(f"Запрос на ввод ФИО отправлен. user_data = {context.user_data}")
         return
 

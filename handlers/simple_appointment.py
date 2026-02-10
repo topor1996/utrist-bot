@@ -21,23 +21,17 @@ async def start_simple_appointment(update: Update, context: ContextTypes.DEFAULT
     user_data = context.user_data
     user_data['simple_appointment'] = {'service_type': service_type}
     user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_name']
-    
-    text = f"""
-📝 Заявка на услугу: {service_type}
 
-Для оформления заявки нам нужна следующая информация:
-
-👤 **ФИО** (полное имя)
-📞 **Номер телефона**
-📧 **Email адрес**
-
-Начнем с вашего имени. Пожалуйста, введите ваше **полное ФИО**:
-"""
-    
-    await update.message.reply_text(
-        text,
-        parse_mode='Markdown'
+    text = (
+        f"📝 Заявка на услугу: {service_type}\n\n"
+        "Для оформления заявки нам нужна следующая информация:\n\n"
+        "👤 ФИО (полное имя)\n"
+        "📞 Номер телефона\n"
+        "📧 Email адрес\n\n"
+        "Начнем с вашего имени. Пожалуйста, введите ваше полное ФИО:"
     )
+
+    await update.message.reply_text(text)
 
 async def process_simple_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка шагов упрощенной записи"""
@@ -82,29 +76,25 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
                 "❌ Пожалуйста, введите ваше полное имя (минимум 3 символа):"
             )
             return
-        
+
         # Убеждаемся, что simple_appointment существует
         if 'simple_appointment' not in user_data:
             logger.error("simple_appointment не найден в user_data!")
             user_data['simple_appointment'] = {}
-        
+
         user_data['simple_appointment']['client_name'] = text.strip()
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_phone']
-        
+
         logger.info(f"ФИО получено: {text.strip()}, переходим к телефону. user_data = {user_data}")
         logger.info(f"Новое состояние: {user_data.get('simple_appointment_state')}")
-        
+
         try:
             await update.message.reply_text(
-                """
-📞 Отлично! Теперь введите ваш **номер телефона**:
-
-Можно в любом формате, например:
-• +7 (812) 123-45-67
-• 8 (812) 123-45-67
-• 8121234567
-""",
-                parse_mode='Markdown',
+                "📞 Отлично! Теперь введите ваш номер телефона:\n\n"
+                "Можно в любом формате, например:\n"
+                "• +7 (812) 123-45-67\n"
+                "• 8 (812) 123-45-67\n"
+                "• 8121234567",
                 reply_markup=cancel_keyboard()
             )
             logger.info("Запрос на телефон отправлен успешно")
@@ -128,14 +118,10 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         user_data['simple_appointment_state'] = SIMPLE_APPOINTMENT_STATES['waiting_email']
 
         logger.info(f"Телефон получен: {result}, переходим к email. user_data = {user_data}")
-        
-        await update.message.reply_text(
-            """
-📧 Отлично! Теперь введите ваш **email адрес**:
 
-Например: ivanov@example.com
-""",
-            parse_mode='Markdown',
+        await update.message.reply_text(
+            "📧 Отлично! Теперь введите ваш email адрес:\n\n"
+            "Например: ivanov@example.com",
             reply_markup=cancel_keyboard()
         )
         return  # Переход к вводу email
@@ -156,26 +142,28 @@ async def process_simple_appointment(update: Update, context: ContextTypes.DEFAU
         logger.info(f"Email введен, показываем подтверждение. user_data = {user_data}")
         
         # Показываем данные для подтверждения
-        confirm_text = f"""
-✅ **Проверьте ваши данные:**
+        service = user_data['simple_appointment']['service_type']
+        name = user_data['simple_appointment']['client_name']
+        phone = user_data['simple_appointment']['client_phone']
+        email = user_data['simple_appointment']['client_email']
 
-📝 Услуга: {user_data['simple_appointment']['service_type']}
-👤 ФИО: {user_data['simple_appointment']['client_name']}
-📞 Телефон: {user_data['simple_appointment']['client_phone']}
-📧 Email: {user_data['simple_appointment']['client_email']}
+        confirm_text = (
+            "✅ Проверьте ваши данные:\n\n"
+            f"📝 Услуга: {service}\n"
+            f"👤 ФИО: {name}\n"
+            f"📞 Телефон: {phone}\n"
+            f"📧 Email: {email}\n\n"
+            "Если все верно, нажмите кнопку \"Отправить заявку\" ниже."
+        )
 
-Если все верно, нажмите кнопку "Отправить заявку" ниже.
-"""
-        
         keyboard = [
             [InlineKeyboardButton('✅ Отправить заявку', callback_data='submit_appointment')],
             [InlineKeyboardButton('❌ Отменить', callback_data='cancel_appointment')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await update.message.reply_text(
             confirm_text,
-            parse_mode='Markdown',
             reply_markup=reply_markup
         )
 
@@ -242,17 +230,16 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
     
     # Отправляем уведомление администраторам
     from datetime import datetime
-    appointment_info = f"""
-📋 **Новая заявка на услугу**
+    appointment_info = (
+        "📋 Новая заявка на услугу\n\n"
+        f"🆔 ID: {appointment_id}\n"
+        f"📝 Услуга: {appointment_data['service_type']}\n"
+        f"👤 ФИО: {appointment_data['client_name']}\n"
+        f"📞 Телефон: {appointment_data['client_phone']}\n"
+        f"📧 Email: {appointment_data['client_email']}\n"
+        f"⏰ Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
 
-🆔 ID: {appointment_id}
-📝 Услуга: {appointment_data['service_type']}
-👤 ФИО: {appointment_data['client_name']}
-📞 Телефон: {appointment_data['client_phone']}
-📧 Email: {appointment_data['client_email']}
-⏰ Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-"""
-    
     # Отправляем уведомление администраторам
     notification_sent = False
     for admin_id in ADMIN_IDS:
@@ -261,34 +248,28 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
             await context.bot.send_message(
                 chat_id=admin_id,
                 text=appointment_info,
-                parse_mode='Markdown',
                 reply_markup=appointment_actions_keyboard(appointment_id)
             )
             notification_sent = True
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
-    
+
     if not notification_sent and ADMIN_IDS:
         logger.warning(f"ВНИМАНИЕ: Уведомление администраторам не отправлено! Проверьте ADMIN_IDS в настройках.")
-    
+
     # Отправляем красивое сообщение клиенту
-    thank_you_text = f"""
-✅ **Спасибо за вашу заявку!**
+    thank_you_text = (
+        "✅ Спасибо за вашу заявку!\n\n"
+        f"Ваша заявка на услугу \"{appointment_data['service_type']}\" успешно принята.\n\n"
+        "📋 Ваши данные:\n"
+        f"👤 ФИО: {appointment_data['client_name']}\n"
+        f"📞 Телефон: {appointment_data['client_phone']}\n"
+        f"📧 Email: {appointment_data['client_email']}\n\n"
+        "Наш специалист свяжется с вами в ближайшее время для уточнения деталей.\n\n"
+        f"Если у вас есть срочный вопрос, вы можете позвонить нам по телефону {COMPANY_PHONE}\n\n"
+        "Спасибо, что выбрали нас! 🙏"
+    )
 
-Ваша заявка на услугу **"{appointment_data['service_type']}"** успешно принята.
-
-📋 **Ваши данные:**
-👤 ФИО: {appointment_data['client_name']}
-📞 Телефон: {appointment_data['client_phone']}
-📧 Email: {appointment_data['client_email']}
-
-Наш специалист свяжется с вами в ближайшее время для уточнения деталей.
-
-Если у вас есть срочный вопрос, вы можете позвонить нам по телефону {COMPANY_PHONE}
-
-Спасибо, что выбрали нас! 🙏
-"""
-    
     # Кнопки
     phone_clean = COMPANY_PHONE.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
     keyboard = [
@@ -296,12 +277,11 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
         [InlineKeyboardButton('🔙 Назад к услугам', callback_data='back_to_services')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     # Редактируем сообщение с благодарностью (вместо двух сообщений)
     try:
         await query.edit_message_text(
             thank_you_text,
-            parse_mode='Markdown',
             reply_markup=reply_markup
         )
         logger.info("Сообщение 'Спасибо' отправлено клиенту")
@@ -311,12 +291,10 @@ async def submit_appointment_callback(update: Update, context: ContextTypes.DEFA
         try:
             await query.message.reply_text(
                 thank_you_text,
-                parse_mode='Markdown',
                 reply_markup=reply_markup
             )
         except Exception as e2:
             logger.error(f"Ошибка отправки сообщения клиенту: {e2}")
-            # Пытаемся отправить хотя бы простое сообщение
             try:
                 await query.message.reply_text(
                     "✅ Спасибо за вашу заявку! Наш специалист свяжется с вами в ближайшее время."
